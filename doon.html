@@ -5,30 +5,321 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Doom stílusú 3D pálya</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  :root {
+    color-scheme: dark;
+    --ui-bg: rgba(10, 10, 14, 0.84);
+    --ui-border: rgba(255, 255, 255, 0.2);
+    --accent: #4bf38c;
+  }
+
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: Inter, Segoe UI, Arial, sans-serif; }
   canvas { display: block; width: 100vw; height: 100vh; }
+
+  #hud {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 20;
+  }
+
   .hint {
     position: fixed;
     top: 10px;
     left: 10px;
     color: #fff;
     font-family: monospace;
-    font-size: 14px;
+    font-size: 13px;
     background: rgba(0, 0, 0, 0.55);
     padding: 8px 10px;
     border: 1px solid rgba(255,255,255,0.25);
-    z-index: 10;
+    z-index: 21;
     user-select: none;
+    pointer-events: none;
   }
+
+  .ammo-panel {
+    position: fixed;
+    right: 20px;
+    bottom: 16px;
+    min-width: 220px;
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid var(--ui-border);
+    background: linear-gradient(180deg, rgba(19,22,28,.9), rgba(8,9,12,.92));
+    box-shadow: 0 0 30px rgba(0,0,0,.45);
+    z-index: 21;
+    pointer-events: none;
+  }
+
+  .ammo-head {
+    display: flex;
+    justify-content: space-between;
+    color: #cfd5de;
+    font-size: 12px;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  #ammoText {
+    font-weight: 700;
+    color: #fff;
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  #bulletStrip {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 4px;
+  }
+
+  .bullet {
+    height: 16px;
+    border-radius: 3px 3px 6px 6px;
+    background: linear-gradient(180deg, #f9d16f, #b2822f);
+    border: 1px solid rgba(30, 20, 8, 0.65);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .bullet::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(255,255,255,.35), transparent 40%);
+  }
+
+  .bullet.empty {
+    background: linear-gradient(180deg, #3a3d45, #1e2128);
+    border-color: rgba(255,255,255,0.08);
+  }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.72);
+  }
+
+  .overlay.visible { display: flex; }
+
+  #mainMenu {
+    background-image: linear-gradient(rgba(5,5,8,.64), rgba(5,5,8,.8)), url("menuback.png");
+    background-size: cover;
+    background-position: center;
+  }
+
+  .menu-card {
+    width: min(920px, 95vw);
+    max-height: 90vh;
+    background: var(--ui-bg);
+    border: 1px solid var(--ui-border);
+    border-radius: 16px;
+    backdrop-filter: blur(3px);
+    box-shadow: 0 20px 50px rgba(0,0,0,.5);
+    color: #e7ebf2;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 280px 1fr;
+  }
+
+  .menu-left {
+    padding: 18px;
+    border-right: 1px solid rgba(255,255,255,.1);
+    background: rgba(9, 11, 15, 0.8);
+  }
+
+  .menu-title {
+    margin: 4px 0 16px;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: 1px;
+  }
+
+  .menu-sub {
+    margin: 0 0 22px;
+    color: #a9b2c0;
+    font-size: 13px;
+  }
+
+  .menu-btn {
+    width: 100%;
+    border: 1px solid rgba(255,255,255,.2);
+    background: rgba(255,255,255,.04);
+    color: #f2f5ff;
+    border-radius: 10px;
+    padding: 11px 13px;
+    margin-bottom: 10px;
+    text-align: left;
+    font-size: 15px;
+    cursor: pointer;
+    transition: .18s ease;
+  }
+
+  .menu-btn:hover, .menu-btn.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(75,243,140,.3) inset;
+    transform: translateY(-1px);
+  }
+
+  .menu-right {
+    padding: 22px;
+    overflow: hidden;
+  }
+
+  .tab-content { display: none; height: 100%; }
+  .tab-content.visible {
+    display: block;
+    overflow: auto;
+    max-height: calc(90vh - 44px);
+    padding-right: 8px;
+  }
+
+  .stat {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    font-size: 14px;
+    color: #b9c1ce;
+  }
+
+  .field {
+    margin-bottom: 16px;
+    display: grid;
+    gap: 8px;
+  }
+
+  label { font-weight: 600; color: #dce3ee; }
+
+  select, .toggle {
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,.2);
+    background: rgba(255,255,255,.06);
+    color: #fff;
+    padding: 9px 11px;
+    font-size: 14px;
+  }
+
+  .pause-card {
+    width: min(460px, 90vw);
+    border: 1px solid var(--ui-border);
+    border-radius: 14px;
+    background: var(--ui-bg);
+    padding: 22px;
+    color: #f0f3fa;
+  }
+
+  .pause-title { margin-top: 0; }
+  .muted { color: #a2acba; font-size: 13px; margin-top: 0; }
 </style>
 </head>
 <body>
-<div class="hint">Kattints a nézethez • WASD mozgás • Egér fordulás</div>
 <canvas id="game"></canvas>
+
+<div id="hud" aria-hidden="true">
+  <div class="hint" id="hint">Kattints a nézethez • WASD mozgás • Egér fel/le nézés • SPACE ugrás • C guggolás • R töltés • ESC menü</div>
+  <div class="ammo-panel" id="ammoPanel">
+    <div class="ammo-head">
+      <span>Lőszer</span>
+      <span id="ammoText">20 / 100</span>
+    </div>
+    <div id="bulletStrip"></div>
+  </div>
+</div>
+
+<div id="mainMenu" class="overlay visible">
+  <div class="menu-card">
+    <aside class="menu-left">
+      <h1 class="menu-title">DOOMSZER</h1>
+      <p class="menu-sub">Kezdő menü • háttér: menuback.png</p>
+      <button class="menu-btn" id="newGameBtn">Új játék</button>
+      <button class="menu-btn" id="continueBtn">Folytatás</button>
+      <button class="menu-btn active" data-tab="settings">Beállítások</button>
+      <button class="menu-btn" data-tab="profile">Profil</button>
+      <button class="menu-btn" data-tab="store">Store (hamarosan)</button>
+      <button class="menu-btn" data-tab="scoreboard">Scoreboard (hamarosan)</button>
+    </aside>
+    <section class="menu-right">
+      <div id="settings" class="tab-content visible">
+        <h2>Beállítások</h2>
+        <p class="muted">Görgess lejjebb további opciókért.</p>
+        <div class="field">
+          <label for="soundToggle">Hang</label>
+          <select id="soundToggle">
+            <option value="on">Bekapcsolva</option>
+            <option value="off">Kikapcsolva</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="languageSelect">Nyelv</label>
+          <select id="languageSelect">
+            <option value="hu">Magyar</option>
+            <option value="en">English</option>
+            <option value="de">Deutsch</option>
+            <option value="uk">Українська</option>
+            <option value="zh">中文</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="difficultySelect">Nehézség</label>
+          <select id="difficultySelect">
+            <option value="easy">Easy</option>
+            <option value="normal" selected>Normal</option>
+            <option value="hard">Hard</option>
+          </select>
+        </div>
+        <div style="height: 540px; opacity: .75; border-top: 1px solid rgba(255,255,255,.1); padding-top: 12px;">
+          <p>További beállítások helye (scroll teszt).</p>
+        </div>
+      </div>
+      <div id="profile" class="tab-content">
+        <h2>Mentett adatok</h2>
+        <div class="stat"><span>Legutóbbi pontszám</span><strong id="lastScore">0</strong></div>
+        <div class="stat"><span>Összes lövés</span><strong id="totalShots">0</strong></div>
+      </div>
+      <div id="store" class="tab-content">
+        <h2>Store</h2>
+        <p class="muted">Ezt később készítjük el.</p>
+      </div>
+      <div id="scoreboard" class="tab-content">
+        <h2>Scoreboard</h2>
+        <p class="muted">Ezt később készítjük el.</p>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div id="pauseMenu" class="overlay">
+  <div class="pause-card">
+    <h2 class="pause-title">Szünet</h2>
+    <p class="muted">ESC: vissza a játékba • egér elengedve</p>
+    <button class="menu-btn" id="resumeBtn">Resume</button>
+    <button class="menu-btn" id="restartBtn">Restart</button>
+    <button class="menu-btn" id="toMenuBtn">Menü</button>
+    <button class="menu-btn" id="exitBtn">Kilépés az asztalra</button>
+  </div>
+</div>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+
+const hud = document.getElementById("hud");
+const mainMenu = document.getElementById("mainMenu");
+const pauseMenu = document.getElementById("pauseMenu");
+const hint = document.getElementById("hint");
+const ammoText = document.getElementById("ammoText");
+const bulletStrip = document.getElementById("bulletStrip");
+const lastScoreEl = document.getElementById("lastScore");
+const totalShotsEl = document.getElementById("totalShots");
+
+const STORAGE_KEY = "doomszer-save-v2";
 
 function resize() {
   canvas.width = window.innerWidth;
@@ -37,11 +328,10 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-// --- Kért arányok ---
-const TILE_SIZE = 128;          // 1 tile = 128 unit
-const WALL_HEIGHT = 192;        // nagyobb tér érzet
-const PLAYER_RADIUS = 20;       // collision 32-48 unit szélességhez igazítva
-const PLAYER_HEIGHT = 64;       // referencia 56-72
+const TILE_SIZE = 128;
+const WALL_HEIGHT = 192;
+const PLAYER_RADIUS = 20;
+const PLAYER_HEIGHT = 64;
 
 const MAP = [
   "11111111111111111111111111111111",
@@ -68,7 +358,7 @@ const MAP = [
   "11111110000000000000001111111111",
   "11111111111111111111111111111111",
   "11111111111111111111111111111111"
-].map(row => row.split("").map(Number));
+].map((row) => row.split("").map(Number));
 
 const worldWidth = MAP[0].length * TILE_SIZE;
 const worldHeight = MAP.length * TILE_SIZE;
@@ -77,7 +367,23 @@ const player = {
   x: TILE_SIZE * 2.5,
   y: TILE_SIZE * 2.5,
   angle: 0,
+  pitch: 0,
+  z: 0,
+  velocityZ: 0,
+  isGrounded: true,
+  isCrouching: false,
   eyeHeight: PLAYER_HEIGHT
+};
+
+const game = {
+  state: "menu",
+  score: 0,
+  totalShots: 0,
+  settings: {
+    sound: "on",
+    language: "hu",
+    difficulty: "normal"
+  }
 };
 
 const keys = Object.create(null);
@@ -85,32 +391,223 @@ const keys = Object.create(null);
 const weapon = {
   modelFile: "m3_benelli_final.max",
   recoil: 0,
-  muzzleFlash: 0
+  muzzleFlash: 0,
+  clipSize: 20,
+  ammoInClip: 20,
+  reserveAmmo: 100,
+  reloading: false,
+  reloadTimer: 0,
+  reloadTime: 1.35
 };
 
+const floorTexture = new Image();
+const wallTexture = new Image();
+const mapTexture = new Image();
+floorTexture.src = "wood.png";
+wallTexture.src = "wall.png";
+mapTexture.src = "map.png";
+
+let floorPixels = null;
+let floorTexW = 0;
+let floorTexH = 0;
+
+floorTexture.onload = () => {
+  const tmp = document.createElement("canvas");
+  floorTexW = floorTexture.naturalWidth || floorTexture.width;
+  floorTexH = floorTexture.naturalHeight || floorTexture.height;
+  tmp.width = floorTexW;
+  tmp.height = floorTexH;
+  const tctx = tmp.getContext("2d");
+  tctx.drawImage(floorTexture, 0, 0);
+  floorPixels = tctx.getImageData(0, 0, floorTexW, floorTexH).data;
+};
+
+function saveGame() {
+  const payload = {
+    score: game.score,
+    totalShots: game.totalShots,
+    settings: game.settings,
+    player: {
+      x: player.x,
+      y: player.y,
+      angle: player.angle,
+      pitch: player.pitch
+    },
+    weapon: {
+      ammoInClip: weapon.ammoInClip,
+      reserveAmmo: weapon.reserveAmmo
+    }
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  refreshProfileStats();
+}
+
+function loadGame() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return false;
+  try {
+    const data = JSON.parse(raw);
+    game.score = data.score || 0;
+    game.totalShots = data.totalShots || 0;
+    Object.assign(game.settings, data.settings || {});
+    if (data.player) {
+      player.x = data.player.x || player.x;
+      player.y = data.player.y || player.y;
+      player.angle = data.player.angle || 0;
+      player.pitch = data.player.pitch || 0;
+    }
+    if (data.weapon) {
+      weapon.ammoInClip = Math.max(0, Math.min(weapon.clipSize, data.weapon.ammoInClip ?? weapon.clipSize));
+      weapon.reserveAmmo = Math.max(0, data.weapon.reserveAmmo ?? 100);
+    }
+    syncSettingsControls();
+    refreshProfileStats();
+    updateAmmoHud();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function syncSettingsControls() {
+  document.getElementById("soundToggle").value = game.settings.sound;
+  document.getElementById("languageSelect").value = game.settings.language;
+  document.getElementById("difficultySelect").value = game.settings.difficulty;
+}
+
+function refreshProfileStats() {
+  lastScoreEl.textContent = String(game.score);
+  totalShotsEl.textContent = String(game.totalShots);
+}
+
+function resetRun() {
+  player.x = TILE_SIZE * 2.5;
+  player.y = TILE_SIZE * 2.5;
+  player.angle = 0;
+  player.pitch = 0;
+  player.z = 0;
+  player.velocityZ = 0;
+  player.isGrounded = true;
+  player.isCrouching = false;
+  player.eyeHeight = PLAYER_HEIGHT;
+
+  game.score = 0;
+  weapon.ammoInClip = weapon.clipSize;
+  weapon.reserveAmmo = 100;
+  weapon.reloading = false;
+  weapon.reloadTimer = 0;
+
+  updateAmmoHud();
+  refreshProfileStats();
+  saveGame();
+}
+
+function enterGame() {
+  game.state = "playing";
+  mainMenu.classList.remove("visible");
+  pauseMenu.classList.remove("visible");
+  hud.style.display = "block";
+  hint.style.display = "block";
+  canvas.requestPointerLock();
+}
+
+function openMainMenu() {
+  game.state = "menu";
+  mainMenu.classList.add("visible");
+  pauseMenu.classList.remove("visible");
+  hud.style.display = "none";
+  if (document.pointerLockElement === canvas) document.exitPointerLock();
+}
+
+function togglePause() {
+  if (game.state === "playing") {
+    game.state = "paused";
+    pauseMenu.classList.add("visible");
+    if (document.pointerLockElement === canvas) document.exitPointerLock();
+    saveGame();
+  } else if (game.state === "paused") {
+    pauseMenu.classList.remove("visible");
+    enterGame();
+  }
+}
+
+function updateAmmoHud() {
+  ammoText.textContent = `${weapon.ammoInClip} / ${weapon.reserveAmmo}`;
+  bulletStrip.innerHTML = "";
+  for (let i = 0; i < weapon.clipSize; i++) {
+    const el = document.createElement("span");
+    el.className = `bullet ${i < weapon.ammoInClip ? "" : "empty"}`;
+    bulletStrip.appendChild(el);
+  }
+}
+
+function startReload() {
+  if (weapon.reloading) return;
+  if (weapon.ammoInClip >= weapon.clipSize) return;
+  if (weapon.reserveAmmo <= 0) return;
+  weapon.reloading = true;
+  weapon.reloadTimer = weapon.reloadTime;
+}
+
+function fireWeapon() {
+  if (weapon.reloading || weapon.ammoInClip <= 0 || game.state !== "playing") return;
+  weapon.ammoInClip -= 1;
+  weapon.recoil = 1;
+  weapon.muzzleFlash = 0.08;
+  game.totalShots += 1;
+  game.score += 10;
+  updateAmmoHud();
+  if (weapon.ammoInClip === 0) startReload();
+}
+
 document.addEventListener("keydown", (e) => {
-  keys[e.key.toLowerCase()] = true;
+  const key = e.key.toLowerCase();
+
+  if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(e.key.toLowerCase())) {
+    e.preventDefault();
+  }
+
+  if (key === "escape") {
+    if (game.state === "menu") return;
+    togglePause();
+    return;
+  }
+
+  if (key === "r") {
+    startReload();
+    return;
+  }
+
+  if (key === "c") {
+    player.isCrouching = true;
+  }
+
+  if (key === " " && game.state === "playing" && player.isGrounded) {
+    player.velocityZ = 300;
+    player.isGrounded = false;
+  }
+
+  keys[key] = true;
 });
 
 document.addEventListener("keyup", (e) => {
-  keys[e.key.toLowerCase()] = false;
+  const key = e.key.toLowerCase();
+  keys[key] = false;
+  if (key === "c") player.isCrouching = false;
 });
 
-canvas.addEventListener("click", () => canvas.requestPointerLock());
+canvas.addEventListener("click", () => {
+  if (game.state === "playing") canvas.requestPointerLock();
+});
 
 document.addEventListener("mousemove", (e) => {
-  if (document.pointerLockElement === canvas) {
-    player.angle += e.movementX * 0.0026;
-  }
+  if (document.pointerLockElement !== canvas || game.state !== "playing") return;
+  player.angle += e.movementX * 0.0026;
+  player.pitch = Math.max(-0.33, Math.min(0.33, player.pitch + e.movementY * 0.0018));
 });
 
-function fireWeapon() {
-  weapon.recoil = 1;
-  weapon.muzzleFlash = 0.08;
-}
-
 canvas.addEventListener("mousedown", (e) => {
-  if (e.button === 0 && document.pointerLockElement === canvas) {
+  if (e.button === 0 && document.pointerLockElement === canvas && game.state === "playing") {
     fireWeapon();
   }
 });
@@ -127,26 +624,22 @@ function isWallAt(x, y) {
 }
 
 function tryMove(nx, ny) {
-  // Kör alapú ütközés 4 ponttal
   const r = PLAYER_RADIUS;
-  const canX = !isWallAt(nx + r, player.y) && !isWallAt(nx - r, player.y) &&
-               !isWallAt(nx, player.y + r) && !isWallAt(nx, player.y - r);
-  const canY = !isWallAt(player.x + r, ny) && !isWallAt(player.x - r, ny) &&
-               !isWallAt(player.x, ny + r) && !isWallAt(player.x, ny - r);
+  const canX = !isWallAt(nx + r, player.y) && !isWallAt(nx - r, player.y) && !isWallAt(nx, player.y + r) && !isWallAt(nx, player.y - r);
+  const canY = !isWallAt(player.x + r, ny) && !isWallAt(player.x - r, ny) && !isWallAt(player.x, ny + r) && !isWallAt(player.x, ny - r);
 
   if (canX) player.x = Math.max(r, Math.min(worldWidth - r, nx));
   if (canY) player.y = Math.max(r, Math.min(worldHeight - r, ny));
 }
 
 function updatePlayer(dt) {
-  const turnSpeed = 2.5;
+  if (game.state !== "playing") return;
+
   const moveSpeed = (keys["shift"] ? 360 : 250) * dt;
+  const lookTurnSpeed = 2.5;
 
-  weapon.recoil = Math.max(0, weapon.recoil - dt * 7);
-  weapon.muzzleFlash = Math.max(0, weapon.muzzleFlash - dt);
-
-  if (keys["arrowleft"]) player.angle -= turnSpeed * dt;
-  if (keys["arrowright"]) player.angle += turnSpeed * dt;
+  if (keys["arrowleft"]) player.angle -= lookTurnSpeed * dt;
+  if (keys["arrowright"]) player.angle += lookTurnSpeed * dt;
 
   let vx = 0;
   let vy = 0;
@@ -169,27 +662,33 @@ function updatePlayer(dt) {
   }
 
   tryMove(player.x + vx, player.y + vy);
+
+  const targetHeight = player.isCrouching ? PLAYER_HEIGHT * 0.62 : PLAYER_HEIGHT;
+  player.eyeHeight += (targetHeight - player.eyeHeight) * Math.min(1, dt * 13);
+
+  player.velocityZ -= 780 * dt;
+  player.z += player.velocityZ * dt;
+  if (player.z <= 0) {
+    player.z = 0;
+    player.velocityZ = 0;
+    player.isGrounded = true;
+  }
+
+  weapon.recoil = Math.max(0, weapon.recoil - dt * 7);
+  weapon.muzzleFlash = Math.max(0, weapon.muzzleFlash - dt);
+
+  if (weapon.reloading) {
+    weapon.reloadTimer -= dt;
+    if (weapon.reloadTimer <= 0) {
+      const need = weapon.clipSize - weapon.ammoInClip;
+      const take = Math.min(need, weapon.reserveAmmo);
+      weapon.ammoInClip += take;
+      weapon.reserveAmmo -= take;
+      weapon.reloading = false;
+      updateAmmoHud();
+    }
+  }
 }
-
-const floorTexture = new Image();
-const wallTexture = new Image();
-floorTexture.src = "wood.png";
-wallTexture.src = "wall.png";
-
-let floorPixels = null;
-let floorTexW = 0;
-let floorTexH = 0;
-
-floorTexture.onload = () => {
-  const tmp = document.createElement("canvas");
-  floorTexW = floorTexture.naturalWidth || floorTexture.width;
-  floorTexH = floorTexture.naturalHeight || floorTexture.height;
-  tmp.width = floorTexW;
-  tmp.height = floorTexH;
-  const tctx = tmp.getContext("2d");
-  tctx.drawImage(floorTexture, 0, 0);
-  floorPixels = tctx.getImageData(0, 0, floorTexW, floorTexH).data;
-};
 
 function castRay(rayAngle, maxDist = 4600) {
   const step = 4;
@@ -220,13 +719,12 @@ function castRay(rayAngle, maxDist = 4600) {
 }
 
 function renderFloorAndSky() {
-  const horizon = canvas.height * 0.5;
+  const horizon = canvas.height * (0.5 + player.pitch) - player.z * 0.5;
 
-  // Melegebb, bunker-szerű ég/plafon átmenet
-  const sky = ctx.createLinearGradient(0, 0, 0, horizon);
-  sky.addColorStop(0, "#121014");
-  sky.addColorStop(0.55, "#211a1a");
-  sky.addColorStop(1, "#302520");
+  const sky = ctx.createLinearGradient(0, 0, 0, Math.max(1, horizon));
+  sky.addColorStop(0, "#403743");
+  sky.addColorStop(0.4, "#2f2731");
+  sky.addColorStop(1, "#1f1a22");
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, canvas.width, horizon);
 
@@ -236,7 +734,11 @@ function renderFloorAndSky() {
     return;
   }
 
-  const floorImage = ctx.createImageData(canvas.width, canvas.height - horizon);
+  const floorStart = Math.max(0, Math.floor(horizon));
+  const floorHeight = Math.max(0, canvas.height - floorStart);
+  if (floorHeight === 0) return;
+
+  const floorImage = ctx.createImageData(canvas.width, floorHeight);
   const dst = floorImage.data;
 
   const fov = Math.PI / 3;
@@ -251,10 +753,12 @@ function renderFloorAndSky() {
   const ray1X = dirX + planeX;
   const ray1Y = dirY + planeY;
 
-  for (let y = 0; y < floorImage.height; y++) {
-    const screenY = y + horizon;
+  const eye = player.eyeHeight + player.z;
+
+  for (let y = 0; y < floorHeight; y++) {
+    const screenY = y + floorStart;
     const p = Math.max(1, screenY - horizon);
-    const rowDistance = (player.eyeHeight * projDist) / p;
+    const rowDistance = (eye * projDist) / p;
 
     const stepX = (rowDistance * (ray1X - ray0X)) / canvas.width;
     const stepY = (rowDistance * (ray1Y - ray0Y)) / canvas.width;
@@ -283,9 +787,8 @@ function renderFloorAndSky() {
     }
   }
 
-  ctx.putImageData(floorImage, 0, horizon);
+  ctx.putImageData(floorImage, 0, floorStart);
 
-  // Lágy volumetrikus sötétítés, hasonló hangulatért
   const floorFog = ctx.createLinearGradient(0, horizon, 0, canvas.height);
   floorFog.addColorStop(0, "rgba(0,0,0,0.08)");
   floorFog.addColorStop(1, "rgba(0,0,0,0.55)");
@@ -295,6 +798,9 @@ function renderFloorAndSky() {
 
 function renderWalls() {
   const fov = Math.PI / 3;
+  const projDist = canvas.width / (2 * Math.tan(fov / 2));
+  const horizon = canvas.height * (0.5 + player.pitch) - player.z * 0.5;
+  const eye = player.eyeHeight + player.z;
 
   for (let x = 0; x < canvas.width; x++) {
     const t = x / canvas.width;
@@ -302,31 +808,23 @@ function renderWalls() {
     const hit = castRay(rayAngle);
 
     const correctedDist = hit.dist * Math.cos(rayAngle - player.angle);
-    const projDist = canvas.width / (2 * Math.tan(fov / 2));
     const wallScreenHeight = (WALL_HEIGHT / Math.max(1, correctedDist)) * projDist;
-    const top = canvas.height / 2 - ((WALL_HEIGHT - player.eyeHeight) / Math.max(1, correctedDist)) * projDist;
+    const top = horizon - ((WALL_HEIGHT - eye) / Math.max(1, correctedDist)) * projDist;
 
     let texU;
-    if (hit.side === "vertical") {
-      texU = ((hit.hitY % TILE_SIZE) + TILE_SIZE) % TILE_SIZE;
-    } else {
-      texU = ((hit.hitX % TILE_SIZE) + TILE_SIZE) % TILE_SIZE;
-    }
+    if (hit.side === "vertical") texU = ((hit.hitY % TILE_SIZE) + TILE_SIZE) % TILE_SIZE;
+    else texU = ((hit.hitX % TILE_SIZE) + TILE_SIZE) % TILE_SIZE;
+
     const texX = Math.floor((texU / TILE_SIZE) * (wallTexture.width || 1));
 
     if (wallTexture.complete && wallTexture.naturalWidth > 0) {
-      ctx.drawImage(
-        wallTexture,
-        texX, 0, 1, wallTexture.height,
-        x, top, 1, wallScreenHeight
-      );
+      ctx.drawImage(wallTexture, texX, 0, 1, wallTexture.height, x, top, 1, wallScreenHeight);
     } else {
       const shade = Math.max(45, 220 - correctedDist * 0.07);
       ctx.fillStyle = `rgb(${shade},${shade},${shade})`;
       ctx.fillRect(x, top, 1, wallScreenHeight);
     }
 
-    // Távolsági árnyék
     const fog = Math.min(0.72, correctedDist / 2100);
     ctx.fillStyle = `rgba(0,0,0,${fog})`;
     ctx.fillRect(x, top, 1, wallScreenHeight);
@@ -335,7 +833,7 @@ function renderWalls() {
 
 function renderCrosshair() {
   const cx = canvas.width / 2;
-  const cy = canvas.height / 2;
+  const cy = canvas.height * (0.5 + player.pitch * 0.5);
   ctx.fillStyle = "#fff";
   ctx.fillRect(cx - 1, cy - 9, 2, 18);
   ctx.fillRect(cx - 9, cy - 1, 18, 2);
@@ -347,9 +845,8 @@ function renderWeapon() {
   const recoilOffset = weapon.recoil * 24;
   const sway = Math.sin(performance.now() * 0.006) * 2;
   const x = canvas.width * 0.5 - gunW * 0.5 + sway;
-  const y = canvas.height - gunH * 0.88 + recoilOffset;
+  const y = canvas.height - gunH * 0.88 + recoilOffset + player.z * 0.2;
 
-  // tus
   const stockGrad = ctx.createLinearGradient(x, y + gunH * 0.5, x + gunW * 0.46, y + gunH);
   stockGrad.addColorStop(0, "#6b4b2e");
   stockGrad.addColorStop(1, "#2f2014");
@@ -362,7 +859,6 @@ function renderWeapon() {
   ctx.closePath();
   ctx.fill();
 
-  // test
   const bodyGrad = ctx.createLinearGradient(x, y, x + gunW, y + gunH);
   bodyGrad.addColorStop(0, "#75818b");
   bodyGrad.addColorStop(0.45, "#2f3945");
@@ -376,7 +872,6 @@ function renderWeapon() {
   ctx.closePath();
   ctx.fill();
 
-  // cső perspektívában
   const barrelGrad = ctx.createLinearGradient(x + gunW * 0.36, y + gunH * 0.62, x + gunW * 0.82, y + gunH * 0.45);
   barrelGrad.addColorStop(0, "#929daa");
   barrelGrad.addColorStop(1, "#252d38");
@@ -393,14 +888,12 @@ function renderWeapon() {
   ctx.fillRect(x + gunW * 0.6, y + gunH * 0.56, gunW * 0.08, gunH * 0.04);
   ctx.fillRect(x + gunW * 0.69, y + gunH * 0.53, gunW * 0.06, gunH * 0.04);
 
-  ctx.fillStyle = "rgba(255,255,255,0.4)";
-  ctx.fillRect(x + gunW * 0.36, y + gunH * 0.67, gunW * 0.42, gunH * 0.012);
-  ctx.fillStyle = "rgba(0,0,0,0.35)";
-  ctx.fillRect(x + gunW * 0.32, y + gunH * 0.78, gunW * 0.4, gunH * 0.03);
-
   ctx.fillStyle = "rgba(255,255,255,0.8)";
   ctx.font = `${Math.max(11, Math.floor(canvas.height * 0.015))}px monospace`;
   ctx.fillText(`Model: ${weapon.modelFile}`, x + gunW * 0.12, y + gunH * 1.02);
+  if (weapon.reloading) {
+    ctx.fillText("RELOADING...", x + gunW * 0.12, y + gunH * 1.12);
+  }
 
   if (weapon.muzzleFlash > 0) {
     const alpha = Math.min(0.7, weapon.muzzleFlash * 9);
@@ -412,35 +905,111 @@ function renderWeapon() {
 }
 
 function renderMinimap() {
-  const scale = 0.1;
-  const w = MAP[0].length * TILE_SIZE * scale;
-  const h = MAP.length * TILE_SIZE * scale;
-  const ox = canvas.width - w - 16;
+  const size = Math.min(canvas.width * 0.26, 340);
+  const ox = canvas.width - size - 16;
   const oy = 16;
 
   ctx.fillStyle = "rgba(0,0,0,0.45)";
-  ctx.fillRect(ox - 6, oy - 6, w + 12, h + 12);
+  ctx.fillRect(ox - 8, oy - 8, size + 16, size + 16);
 
-  for (let y = 0; y < MAP.length; y++) {
-    for (let x = 0; x < MAP[0].length; x++) {
-      ctx.fillStyle = MAP[y][x] ? "#c9c9c9" : "#4f4f4f";
-      ctx.fillRect(ox + x * TILE_SIZE * scale, oy + y * TILE_SIZE * scale, TILE_SIZE * scale, TILE_SIZE * scale);
+  if (mapTexture.complete && mapTexture.naturalWidth > 0) {
+    ctx.drawImage(mapTexture, ox, oy, size, size);
+  } else {
+    const scale = size / (MAP[0].length * TILE_SIZE);
+    for (let y = 0; y < MAP.length; y++) {
+      for (let x = 0; x < MAP[0].length; x++) {
+        ctx.fillStyle = MAP[y][x] ? "#c9c9c9" : "#4f4f4f";
+        ctx.fillRect(ox + x * TILE_SIZE * scale, oy + y * TILE_SIZE * scale, TILE_SIZE * scale, TILE_SIZE * scale);
+      }
     }
   }
 
-  const px = ox + player.x * scale;
-  const py = oy + player.y * scale;
+  const scaleX = size / worldWidth;
+  const scaleY = size / worldHeight;
+  const px = ox + player.x * scaleX;
+  const py = oy + player.y * scaleY;
+
   ctx.fillStyle = "#2cff6e";
   ctx.beginPath();
   ctx.arc(px, py, 4, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.strokeStyle = "#2cff6e";
+  ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(px, py);
   ctx.lineTo(px + Math.cos(player.angle) * 14, py + Math.sin(player.angle) * 14);
   ctx.stroke();
+  ctx.lineWidth = 1;
 }
+
+function renderPausedDim() {
+  if (game.state !== "paused") return;
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function setActiveTab(id) {
+  document.querySelectorAll(".tab-content").forEach((node) => node.classList.toggle("visible", node.id === id));
+  document.querySelectorAll("[data-tab]").forEach((node) => node.classList.toggle("active", node.dataset.tab === id));
+}
+
+document.getElementById("newGameBtn").addEventListener("click", () => {
+  resetRun();
+  enterGame();
+});
+
+document.getElementById("continueBtn").addEventListener("click", () => {
+  loadGame();
+  enterGame();
+});
+
+document.querySelectorAll("[data-tab]").forEach((btn) => {
+  btn.addEventListener("click", () => setActiveTab(btn.dataset.tab));
+});
+
+document.getElementById("resumeBtn").addEventListener("click", () => togglePause());
+document.getElementById("restartBtn").addEventListener("click", () => {
+  resetRun();
+  pauseMenu.classList.remove("visible");
+  enterGame();
+});
+
+document.getElementById("toMenuBtn").addEventListener("click", () => {
+  saveGame();
+  openMainMenu();
+});
+
+document.getElementById("exitBtn").addEventListener("click", () => {
+  saveGame();
+  try {
+    window.close();
+  } catch {
+    alert("A böngésző miatt nem minden esetben engedélyezett az automatikus kilépés.");
+  }
+});
+
+document.getElementById("soundToggle").addEventListener("change", (e) => {
+  game.settings.sound = e.target.value;
+  saveGame();
+});
+
+document.getElementById("languageSelect").addEventListener("change", (e) => {
+  game.settings.language = e.target.value;
+  saveGame();
+});
+
+document.getElementById("difficultySelect").addEventListener("change", (e) => {
+  game.settings.difficulty = e.target.value;
+  saveGame();
+});
+
+if (!loadGame()) {
+  syncSettingsControls();
+  refreshProfileStats();
+}
+updateAmmoHud();
+openMainMenu();
 
 let last = performance.now();
 function loop(now) {
@@ -453,10 +1022,15 @@ function loop(now) {
   renderWeapon();
   renderCrosshair();
   renderMinimap();
+  renderPausedDim();
 
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
+
+setInterval(() => {
+  if (game.state === "playing") saveGame();
+}, 3000);
 </script>
 </body>
 </html>
