@@ -626,7 +626,7 @@ function updatePlayer(dt) {
   if (player.z <= 0) { player.z = 0; player.velocityZ = 0; player.isGrounded = true; }
 
   weapon.recoil = Math.max(0, weapon.recoil - dt * 7);
-  weapon.muzzleFlash = Math.max(0, weapon.muzzleFlash - dt);
+  weapon.muzzleFlash = Math.max(0, weapon.muzzleFlash - dt * 1.9);
   weapon.fireCooldown = Math.max(0, weapon.fireCooldown - dt);
 
   if (game.autoFire && keys["mouse0"]) fireWeapon();
@@ -788,10 +788,10 @@ function renderWeapon() {
   }
 
   if (weapon.muzzleFlash > 0) {
-    const alpha = Math.min(0.8, weapon.muzzleFlash * 9);
+    const alpha = Math.min(0.48, weapon.muzzleFlash * 6);
     ctx.fillStyle = `rgba(255,210,120,${alpha})`;
     ctx.beginPath();
-    ctx.ellipse(muzzleX, muzzleY, gunW * 0.1, gunH * 0.22, 0, 0, Math.PI*2);
+    ctx.ellipse(muzzleX, muzzleY, gunW * 0.065, gunH * 0.14, 0, 0, Math.PI*2);
     ctx.fill();
   }
 
