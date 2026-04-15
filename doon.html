@@ -628,6 +628,8 @@ function floorPatternSample(worldX, worldY, rowDistance) {
   const cellY = Math.floor(worldY / TILE_SIZE);
   const localX = ((worldX % TILE_SIZE) + TILE_SIZE) % TILE_SIZE;
   const localY = ((worldY % TILE_SIZE) + TILE_SIZE) % TILE_SIZE;
+  const tileU = localX / TILE_SIZE;
+  const tileV = localY / TILE_SIZE;
 
   const nearLeft = localX;
   const nearRight = TILE_SIZE - localX;
@@ -646,16 +648,24 @@ function floorPatternSample(worldX, worldY, rowDistance) {
     wallBlend = wallBlend * wallBlend;
   }
 
+  const checker = ((cellX + cellY) & 1) ? 0.92 : 1.08;
+  const groutLine = Math.max(
+    Math.exp(-Math.min(tileU, 1 - tileU) * 26),
+    Math.exp(-Math.min(tileV, 1 - tileV) * 26)
+  );
+  const groutDarken = Math.min(0.2, groutLine * 0.14);
+
   const bandsX = Math.sin((worldX * FLOOR_PATTERN_SCALE) + cellY * 0.58);
   const bandsY = Math.cos((worldY * FLOOR_PATTERN_SCALE * 1.07) - cellX * 0.63);
-  const pattern = 0.88 + (bandsX * bandsY) * 0.16;
+  const pattern = (0.9 + (bandsX * bandsY) * 0.13) * checker;
   const distanceFade = Math.max(0.35, 1 - rowDistance / 3200);
+  const tintBase = Math.max(0.42, (pattern - groutDarken) * distanceFade);
 
   return {
-    darken: wallBlend * 0.55,
-    tintR: (1 + wallBlend * 0.06) * pattern * distanceFade,
-    tintG: (1 - wallBlend * 0.08) * pattern * distanceFade,
-    tintB: (1 - wallBlend * 0.16) * pattern * distanceFade
+    darken: Math.min(0.72, wallBlend * 0.55 + groutDarken),
+    tintR: (1 + wallBlend * 0.08) * tintBase,
+    tintG: (1 - wallBlend * 0.06) * tintBase,
+    tintB: (1 - wallBlend * 0.14) * tintBase
   };
 }
 
