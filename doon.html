@@ -1,0 +1,221 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Mini Doom PC</title>
+<style>
+body { margin: 0; overflow: hidden; background: black; }
+canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const map = [
+ [1,1,1,1,1,1],
+ [1,0,0,0,0,1],
+ [1,0,1,0,0,1],
+ [1,0,0,0,0,1],
+ [1,1,1,1,1,1]
+];
+
+let player = {
+    x: 2,
+    y: 2,
+    angle: 0,
+    z: 0,
+    velZ: 0,
+    crouch: 0
+};
+
+let keys = {};
+
+document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+
+canvas.addEventListener("click", () => {
+    canvas.requestPointerLock();
+});
+
+document.addEventListener("mousemove", e => {
+    if (document.pointerLockElement === canvas) {
+        player.angle += e.movementX * 0.002;
+    }
+});
+
+document.addEventListener("contextmenu", e => e.preventDefault());
+
+document.addEventListener("mousedown", e => {
+    if (e.button === 2) shoot(); // jobb klikk
+});
+
+let enemy = {
+    x: 4,
+    y: 2,
+    alive: true
+};
+
+function shoot() {
+    let dx = Math.cos(player.angle);
+    let dy = Math.sin(player.angle);
+
+    let dist = 0;
+    while (dist < 6) {
+        dist += 0.1;
+        let x = Math.floor(player.x + dx * dist);
+        let y = Math.floor(player.y + dy * dist);
+
+        if (enemy.alive && x === Math.floor(enemy.x) && y === Math.floor(enemy.y)) {
+            enemy.alive = false;
+            console.log("Enemy down 😎");
+            return;
+        }
+    }
+}
+
+function movePlayer() {
+    let speed = 0.05;
+
+    if (keys["w"]) {
+        player.x += Math.cos(player.angle) * speed;
+        player.y += Math.sin(player.angle) * speed;
+    }
+    if (keys["s"]) {
+        player.x -= Math.cos(player.angle) * speed;
+        player.y -= Math.sin(player.angle) * speed;
+    }
+    if (keys["a"]) {
+        player.x += Math.cos(player.angle - Math.PI/2) * speed;
+        player.y += Math.sin(player.angle - Math.PI/2) * speed;
+    }
+    if (keys["d"]) {
+        player.x += Math.cos(player.angle + Math.PI/2) * speed;
+        player.y += Math.sin(player.angle + Math.PI/2) * speed;
+    }
+}
+
+function handleJump() {
+    if (keys[" "] && player.z === 0) {
+        player.velZ = 0.15;
+    }
+
+    player.z += player.velZ;
+    player.velZ -= 0.01;
+
+    if (player.z < 0) {
+        player.z = 0;
+        player.velZ = 0;
+    }
+}
+
+function handleCrouch() {
+    if (keys["c"]) {
+        player.crouch = 20;
+    } else {
+        player.crouch = 0;
+    }
+}
+
+function moveEnemy() {
+    if (!enemy.alive) return;
+
+    let dx = player.x - enemy.x;
+    let dy = player.y - enemy.y;
+
+    let dist = Math.sqrt(dx*dx + dy*dy);
+
+    if (dist > 0.5) {
+        enemy.x += dx / dist * 0.01;
+        enemy.y += dy / dist * 0.01;
+    }
+}
+
+function castRays() {
+    let fov = Math.PI / 3;
+
+    for (let i = 0; i < canvas.width; i++) {
+        let rayAngle = player.angle - fov/2 + (i / canvas.width) * fov;
+
+        let dist = 0;
+        let hit = false;
+
+        while (!hit && dist < 20) {
+            dist += 0.05;
+
+            let testX = Math.floor(player.x + Math.cos(rayAngle) * dist);
+            let testY = Math.floor(player.y + Math.sin(rayAngle) * dist);
+
+            if (map[testY] && map[testY][testX] === 1) {
+                hit = true;
+            }
+        }
+
+        let wallHeight = canvas.height / dist;
+
+        let offset = player.z * 100 - player.crouch;
+
+        let shade = 255 - dist * 20;
+        ctx.fillStyle = `rgb(${shade},${shade},${shade})`;
+
+        ctx.fillRect(i, canvas.height/2 - wallHeight/2 - offset, 1, wallHeight);
+    }
+}
+
+function drawEnemy() {
+    if (!enemy.alive) return;
+
+    let dx = enemy.x - player.x;
+    let dy = enemy.y - player.y;
+
+    let angle = Math.atan2(dy, dx) - player.angle;
+    let dist = Math.sqrt(dx*dx + dy*dy);
+
+    let size = 400 / dist;
+    let x = canvas.width/2 + Math.tan(angle) * 300;
+
+    let yOffset = player.z * 100 - player.crouch;
+
+    ctx.fillStyle = "red";
+    ctx.fillRect(x - size/2, canvas.height/2 - size/2 - yOffset, size, size);
+}
+
+function drawCrosshair() {
+    ctx.fillStyle = "white";
+    ctx.fillRect(canvas.width/2 - 2, canvas.height/2 - 10, 4, 20);
+    ctx.fillRect(canvas.width/2 - 10, canvas.height/2 - 2, 20, 4);
+}
+
+function update() {
+    movePlayer();
+    handleJump();
+    handleCrouch();
+    moveEnemy();
+}
+
+function draw() {
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    castRays();
+    drawEnemy();
+    drawCrosshair();
+}
+
+function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
