@@ -12,6 +12,10 @@
     --ui-border: rgba(255, 255, 255, 0.22);
     --accent: #f74a72;
     --accent-2: #36ffd0;
+    --minimap-x: 16px;
+    --minimap-y: 16px;
+    --minimap-size: 260px;
+    --minimap-gap: 10px;
   }
 
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: Inter, Segoe UI, Arial, sans-serif; }
@@ -49,21 +53,22 @@
 
   .ammo-panel {
     position: fixed;
-    right: 20px;
-    bottom: 16px;
-    width: min(320px, 40vw);
-    padding: 12px;
-    border-radius: 12px;
-    border: 1px solid var(--ui-border);
-    background: linear-gradient(180deg, rgba(19,22,28,.68), rgba(8,9,12,.7));
-    box-shadow: 0 0 30px rgba(0,0,0,.45);
+    left: var(--minimap-x);
+    top: calc(var(--minimap-y) + var(--minimap-size) + var(--minimap-gap));
+    width: var(--minimap-size);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    backdrop-filter: none;
+    box-shadow: none;
     z-index: 21;
     pointer-events: none;
   }
 
-  .ammo-head { display: flex; justify-content: space-between; color: #d8dfeb; font-size: 13px; margin-bottom: 8px; }
+  .ammo-head { display: flex; justify-content: space-between; color: #d8dfeb; font-size: 13px; margin-bottom: 6px; }
   #ammoText { font-weight: 700; color: #fff; font-size: 18px; }
-  .ammo-load { height: 14px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); }
+  .ammo-load { height: 14px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.2); border: 0; }
   #ammoFill { height: 100%; width: 100%; background: linear-gradient(90deg, #48ff9f, #17c9ff); transition: width .15s linear; }
 
   .overlay { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; }
@@ -277,6 +282,7 @@ function resize() {
   canvas.height = window.innerHeight;
   bigMapCanvas.width = Math.floor(window.innerWidth * 0.88);
   bigMapCanvas.height = Math.floor(window.innerHeight * 0.88);
+  syncHudLayout();
 }
 window.addEventListener("resize", resize);
 resize();
@@ -285,6 +291,11 @@ const TILE_SIZE = 128;
 const WALL_HEIGHT = 192;
 const PLAYER_RADIUS = 20;
 const PLAYER_HEIGHT = 64;
+const HUD_MINIMAP_MARGIN = 16;
+const HUD_MINIMAP_GAP = 10;
+const HUD_MINIMAP_MIN_SIZE = 96;
+const HUD_MINIMAP_MAX_SIZE = 340;
+const HUD_AMMO_ESTIMATED_HEIGHT = 54;
 
 const MAP = [
   "111111111111111111111111",
@@ -810,18 +821,41 @@ function renderWeapon() {
   ctx.fillText(game.autoFire ? "FIRE MODE: AUTO" : "FIRE MODE: SEMI", x + 16, y + gunH + 18);
 }
 
-function renderMinimap(toCtx = ctx, x=16, y=16, size=Math.min(canvas.width*0.26, 340)) {
+function getMinimapLayout() {
+  let size = Math.min(canvas.width * 0.26, HUD_MINIMAP_MAX_SIZE, canvas.height * 0.42);
+  const maxByHeight = canvas.height - (HUD_MINIMAP_MARGIN * 2) - HUD_MINIMAP_GAP - HUD_AMMO_ESTIMATED_HEIGHT;
+  const safeMax = Math.max(48, maxByHeight);
+  size = Math.min(size, safeMax);
+  size = Math.max(Math.min(HUD_MINIMAP_MIN_SIZE, safeMax), size);
+  return { x: HUD_MINIMAP_MARGIN, y: HUD_MINIMAP_MARGIN, size };
+}
+
+function syncHudLayout() {
+  const layout = getMinimapLayout();
+  hud.style.setProperty("--minimap-x", `${layout.x}px`);
+  hud.style.setProperty("--minimap-y", `${layout.y}px`);
+  hud.style.setProperty("--minimap-size", `${layout.size}px`);
+  hud.style.setProperty("--minimap-gap", `${HUD_MINIMAP_GAP}px`);
+}
+
+function renderMinimap(toCtx = ctx, x, y, size) {
+  const layout = (typeof x === "number" && typeof y === "number" && typeof size === "number")
+    ? { x, y, size }
+    : getMinimapLayout();
+  const miniX = layout.x;
+  const miniY = layout.y;
+  const miniSize = layout.size;
   toCtx.fillStyle = "rgba(0,0,0,.45)";
-  toCtx.fillRect(x - 8, y - 8, size + 16, size + 16);
-  if (mapTexture.complete && mapTexture.naturalWidth > 0) toCtx.drawImage(mapTexture, x, y, size, size);
+  toCtx.fillRect(miniX - 8, miniY - 8, miniSize + 16, miniSize + 16);
+  if (mapTexture.complete && mapTexture.naturalWidth > 0) toCtx.drawImage(mapTexture, miniX, miniY, miniSize, miniSize);
   else {
-    const scale = size / (MAP[0].length * TILE_SIZE);
+    const scale = miniSize / (MAP[0].length * TILE_SIZE);
     for (let yy=0; yy<MAP.length; yy++) for (let xx=0; xx<MAP[0].length; xx++) {
       toCtx.fillStyle = MAP[yy][xx] ? "#d3d3d3" : "#9f1f2b";
-      toCtx.fillRect(x + xx*TILE_SIZE*scale, y + yy*TILE_SIZE*scale, TILE_SIZE*scale, TILE_SIZE*scale);
+      toCtx.fillRect(miniX + xx*TILE_SIZE*scale, miniY + yy*TILE_SIZE*scale, TILE_SIZE*scale, TILE_SIZE*scale);
     }
   }
-  const px = x + player.x * (size / worldWidth), py = y + player.y * (size / worldHeight);
+  const px = miniX + player.x * (miniSize / worldWidth), py = miniY + player.y * (miniSize / worldHeight);
   toCtx.fillStyle = "#2cff6e"; toCtx.beginPath(); toCtx.arc(px, py, 4, 0, Math.PI*2); toCtx.fill();
   toCtx.strokeStyle = "#2cff6e"; toCtx.lineWidth = 2;
   toCtx.beginPath(); toCtx.moveTo(px, py); toCtx.lineTo(px + Math.cos(player.angle)*14, py + Math.sin(player.angle)*14); toCtx.stroke();
