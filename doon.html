@@ -282,9 +282,12 @@ window.addEventListener("resize", resize);
 resize();
 
 const TILE_SIZE = 128;
-const WALL_HEIGHT = 192;
+const WALL_HEIGHT = 176;
 const PLAYER_RADIUS = 20;
-const PLAYER_HEIGHT = 64;
+const PLAYER_HEIGHT = 70;
+const CAMERA_FOV = Math.PI / 3;
+const CAMERA_HORIZON_OFFSET = 8;
+const FLOOR_UV_REPEAT = 1;
 
 const MAP = [
   "111111111111111111111111",
@@ -667,9 +670,17 @@ function castRay(rayAngle, maxDist = 4600) {
   return { dist:maxDist, hitX:px, hitY:py, side:"horizontal" };
 }
 
+function getCameraParams() {
+  const fov = CAMERA_FOV;
+  const projDist = canvas.width / (2 * Math.tan(fov / 2));
+  const eye = Math.max(12, player.eyeHeight + player.z);
+  const rawHorizon = canvas.height * 0.5 + player.pitch * canvas.height + CAMERA_HORIZON_OFFSET - player.z * 0.35;
+  const horizon = Math.max(0, Math.min(canvas.height - 1, rawHorizon));
+  return { fov, projDist, eye, horizon };
+}
+
 function renderFloorAndSky() {
-  const rawHorizon = canvas.height * (0.5 + player.pitch) - player.z * 0.5;
-  const horizon = Math.max(0, Math.min(canvas.height, rawHorizon));
+  const { fov, projDist, eye, horizon } = getCameraParams();
 
   const sky = ctx.createLinearGradient(0, 0, 0, Math.max(1, horizon));
   sky.addColorStop(0, "#3f2f38"); sky.addColorStop(.45, "#2a2331"); sky.addColorStop(1, "#1b1720");
@@ -697,18 +708,16 @@ function renderFloorAndSky() {
 
   const floorImage = ctx.createImageData(canvas.width, floorHeight);
   const dst = floorImage.data;
-  const fov = Math.PI / 3;
-  const projDist = canvas.width / (2 * Math.tan(fov / 2));
   const dirX = Math.cos(player.angle), dirY = Math.sin(player.angle);
   const planeX = -dirY * Math.tan(fov / 2), planeY = dirX * Math.tan(fov / 2);
   const ray0X = dirX - planeX, ray0Y = dirY - planeY;
   const ray1X = dirX + planeX, ray1Y = dirY + planeY;
-  const eye = player.eyeHeight + player.z;
+  const floorUvScale = 1 / (TILE_SIZE * FLOOR_UV_REPEAT);
 
   for (let y=0; y<floorHeight; y++) {
     const screenY = y + floorStart;
-    const p = Math.max(1, screenY - horizon);
-    const rowDistance = (eye * projDist) / p;
+    const p = Math.max(1.4, screenY - horizon);
+    const rowDistance = Math.max(TILE_SIZE * 0.22, (eye * projDist) / p);
     const stepX = (rowDistance * (ray1X - ray0X)) / canvas.width;
     const stepY = (rowDistance * (ray1Y - ray0Y)) / canvas.width;
     let floorX = player.x + rowDistance * ray0X;
@@ -716,8 +725,8 @@ function renderFloorAndSky() {
     const shade = Math.max(0.2, 1 - rowDistance / 2500);
 
     for (let x=0; x<canvas.width; x++) {
-      const tx = ((Math.floor(floorX) % TILE_SIZE + TILE_SIZE) % TILE_SIZE) / TILE_SIZE;
-      const ty = ((Math.floor(floorY) % TILE_SIZE + TILE_SIZE) % TILE_SIZE) / TILE_SIZE;
+      const tx = ((floorX * floorUvScale) % 1 + 1) % 1;
+      const ty = ((floorY * floorUvScale) % 1 + 1) % 1;
       const sx = Math.floor(tx * floorTexW) % floorTexW;
       const sy = Math.floor(ty * floorTexH) % floorTexH;
       const src = (sy * floorTexW + sx) * 4;
@@ -733,10 +742,7 @@ function renderFloorAndSky() {
 }
 
 function renderWalls() {
-  const fov = Math.PI / 3;
-  const projDist = canvas.width / (2 * Math.tan(fov / 2));
-  const horizon = canvas.height * (0.5 + player.pitch) - player.z * 0.5;
-  const eye = player.eyeHeight + player.z;
+  const { fov, projDist, horizon, eye } = getCameraParams();
 
   for (let x=0; x<canvas.width; x++) {
     const t = x / canvas.width;
@@ -744,7 +750,8 @@ function renderWalls() {
     const hit = castRay(rayAngle);
     const correctedDist = hit.dist * Math.cos(rayAngle - player.angle);
     const wallScreenHeight = (WALL_HEIGHT / Math.max(1, correctedDist)) * projDist;
-    const top = horizon - ((WALL_HEIGHT - eye) / Math.max(1, correctedDist)) * projDist;
+    const wallBottom = horizon + (eye / Math.max(1, correctedDist)) * projDist;
+    const top = wallBottom - wallScreenHeight;
 
     let texU = hit.side === "vertical" ? ((hit.hitY % TILE_SIZE)+TILE_SIZE)%TILE_SIZE : ((hit.hitX % TILE_SIZE)+TILE_SIZE)%TILE_SIZE;
     const texX = Math.floor((texU / TILE_SIZE) * (wallTexture.width || 1));
