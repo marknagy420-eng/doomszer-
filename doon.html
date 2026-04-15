@@ -22,13 +22,29 @@
   .game-title {
     position: fixed;
     top: 14px;
-    right: 18px;
-    color: #fff;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #000;
     font-size: clamp(24px, 3.2vw, 44px);
     font-weight: 900;
     letter-spacing: 2px;
-    text-shadow: 0 0 22px rgba(247, 74, 114, 0.55);
+    text-shadow:
+      0 1px 0 rgba(255,255,255,.5),
+      0 2px 4px rgba(0,0,0,.55),
+      0 0 12px rgba(0,0,0,.35);
     z-index: 21;
+    animation: titlePulse 2.8s ease-in-out infinite;
+  }
+
+  @keyframes titlePulse {
+    0%, 100% {
+      opacity: .82;
+      filter: drop-shadow(0 0 0 rgba(0,0,0,0));
+    }
+    50% {
+      opacity: 1;
+      filter: drop-shadow(0 0 6px rgba(0,0,0,.42));
+    }
   }
 
   .ammo-panel {
@@ -146,7 +162,6 @@
 <canvas id="game"></canvas>
 
 <div id="hud" aria-hidden="true">
-  <div class="game-title" id="gameTitle">HELLBYTE</div>
   <div class="ammo-panel" id="ammoPanel">
     <div class="ammo-head">
       <span id="ammoLabel">Lőszer</span>
@@ -157,6 +172,7 @@
 </div>
 
 <div id="mainMenu" class="overlay visible">
+  <div class="game-title" id="menuTitle">HELLBYTE</div>
   <div class="menu-shell">
     <button class="menu-btn" id="newGameBtn">Új játék</button>
     <button class="menu-btn" id="continueBtn">Folytatás</button>
@@ -246,6 +262,7 @@ const lastScoreEl = document.getElementById("lastScore");
 const totalShotsEl = document.getElementById("totalShots");
 
 const STORAGE_KEY = "doomszer-save-v3";
+const MOVE_KEYS = ["w", "a", "s", "d"];
 
 const i18n = {
   hu: { newGame:"Új játék",cont:"Folytatás",settings:"Beállítások",store:"Store",score:"Scoreboard", pause:"Szünet", pauseHint:"ESC: vissza a játékba", resume:"Folytatás", restart:"Újra", menu:"Menü", exit:"Kilépés", sound:"Hang", lang:"Nyelv", diff:"Nehézség", ammo:"Lőszer", soon:"Hamarosan.", last:"Legutóbbi pontszám", shots:"Összes lövés" },
@@ -315,9 +332,67 @@ const weapon = {
 const floorTexture = new Image();
 const wallTexture = new Image();
 const gunTexture = new Image();
+const mapTexture = new Image();
 floorTexture.src = "wood.png";
 wallTexture.src = "wall.png";
 gunTexture.src = "gun.png";
+mapTexture.src = "map.png";
+
+const audio = {
+  menuMusic: new Audio("soundtrack.mp3"),
+  walkLoop: new Audio("walk.mp3"),
+  shotTemplate: new Audio("shot.mp3"),
+  reload: new Audio("reload.mp3"),
+  buttonTemplate: new Audio("button.mp3")
+};
+audio.menuMusic.loop = true;
+audio.menuMusic.volume = 0.45;
+audio.walkLoop.loop = true;
+audio.walkLoop.volume = 0.4;
+audio.reload.volume = 0.7;
+audio.shotTemplate.volume = 0.75;
+audio.buttonTemplate.volume = 0.65;
+audio.shotTemplate.preload = "auto";
+audio.buttonTemplate.preload = "auto";
+audio.reload.addEventListener("loadedmetadata", () => {
+  if (Number.isFinite(audio.reload.duration) && audio.reload.duration > 0) {
+    weapon.reloadTime = audio.reload.duration;
+  }
+});
+
+function isSoundOn() { return game.settings.sound !== "off"; }
+function tryPlay(aud, fromStart = false) {
+  if (!isSoundOn()) return;
+  try {
+    if (fromStart) aud.currentTime = 0;
+    const p = aud.play();
+    if (p && typeof p.catch === "function") p.catch(() => {});
+  } catch {}
+}
+function tryPause(aud) {
+  try { aud.pause(); } catch {}
+}
+function playOneShotFrom(template) {
+  if (!isSoundOn()) return;
+  try {
+    const fx = template.cloneNode();
+    fx.volume = template.volume;
+    fx.play().catch(() => {});
+  } catch {}
+}
+function updateMenuMusicState() {
+  if (game.state === "menu" && mainMenu.classList.contains("visible") && isSoundOn()) tryPlay(audio.menuMusic);
+  else tryPause(audio.menuMusic);
+}
+function updateWalkSound() {
+  const walking = game.state === "playing" && MOVE_KEYS.some(k => keys[k]);
+  if (!walking || !isSoundOn()) {
+    tryPause(audio.walkLoop);
+    return;
+  }
+  tryPlay(audio.walkLoop);
+}
+function playButtonSound() { playOneShotFrom(audio.buttonTemplate); }
 
 let floorPixels = null, floorTexW = 0, floorTexH = 0;
 floorTexture.onload = () => {
@@ -397,8 +472,12 @@ function resetRun() {
 }
 
 function withFade(action) {
+  fade.style.transition = "opacity .42s ease";
   fade.style.opacity = "1";
-  setTimeout(() => { action(); fade.style.opacity = "0"; }, 180);
+  setTimeout(() => {
+    action();
+    setTimeout(() => { fade.style.opacity = "0"; }, 80);
+  }, 420);
 }
 
 function enterGame() {
@@ -407,6 +486,8 @@ function enterGame() {
   mainMenu.classList.remove("visible");
   pauseMenu.classList.remove("visible");
   hud.style.display = "block";
+  updateMenuMusicState();
+  updateWalkSound();
   canvas.requestPointerLock();
 }
 
@@ -416,6 +497,8 @@ function openMainMenu() {
   pauseMenu.classList.remove("visible");
   hud.style.display = "none";
   game.mapOpen = false; bigMap.classList.remove("visible");
+  updateMenuMusicState();
+  updateWalkSound();
   if (document.pointerLockElement === canvas) document.exitPointerLock();
 }
 
@@ -450,7 +533,9 @@ function updateAmmoHud() {
 function startReload() {
   if (weapon.reloading || weapon.ammoInClip >= weapon.clipSize || weapon.reserveAmmo <= 0) return;
   weapon.reloading = true;
-  weapon.reloadTimer = weapon.reloadTime;
+  audio.reload.currentTime = 0;
+  tryPlay(audio.reload);
+  weapon.reloadTimer = Math.max(0.1, audio.reload.duration || weapon.reloadTime);
 }
 
 function fireWeapon() {
@@ -462,6 +547,7 @@ function fireWeapon() {
   game.totalShots += 1; game.score += 10;
   game.tracers.push({ life:0.06, len: 80 + Math.random()*40, xJ:(Math.random()-0.5)*10, yJ:(Math.random()-0.5)*8 });
   if (game.tracers.length > 6) game.tracers.shift();
+  playOneShotFrom(audio.shotTemplate);
   updateAmmoHud();
   if (weapon.ammoInClip === 0) startReload();
 }
@@ -477,9 +563,14 @@ document.addEventListener("keydown", (e) => {
   if (key === "capslock" && game.state === "playing") game.autoFire = !game.autoFire;
   if (key === " " && game.state === "playing" && player.isGrounded) { player.velocityZ = 300; player.isGrounded = false; }
   keys[key] = true;
+  if (MOVE_KEYS.includes(key)) updateWalkSound();
 });
 
-document.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
+document.addEventListener("keyup", (e) => {
+  const key = e.key.toLowerCase();
+  keys[key] = false;
+  if (MOVE_KEYS.includes(key)) updateWalkSound();
+});
 
 canvas.addEventListener("click", () => { if (game.state === "playing") canvas.requestPointerLock(); });
 
@@ -528,6 +619,7 @@ function updatePlayer(dt) {
   weapon.fireCooldown = Math.max(0, weapon.fireCooldown - dt);
 
   if (game.autoFire && keys["mouse0"]) fireWeapon();
+  if (!MOVE_KEYS.some(k => keys[k])) updateWalkSound();
 
   if (weapon.reloading) {
     weapon.reloadTimer -= dt;
@@ -537,6 +629,7 @@ function updatePlayer(dt) {
       weapon.ammoInClip += take;
       weapon.reserveAmmo -= take;
       weapon.reloading = false;
+      tryPause(audio.reload);
       updateAmmoHud();
     }
   }
@@ -697,10 +790,13 @@ function renderWeapon() {
 function renderMinimap(toCtx = ctx, x=16, y=16, size=Math.min(canvas.width*0.26, 340)) {
   toCtx.fillStyle = "rgba(0,0,0,.45)";
   toCtx.fillRect(x - 8, y - 8, size + 16, size + 16);
-  const scale = size / (MAP[0].length * TILE_SIZE);
-  for (let yy=0; yy<MAP.length; yy++) for (let xx=0; xx<MAP[0].length; xx++) {
-    toCtx.fillStyle = MAP[yy][xx] ? "#d3d3d3" : "#9f1f2b";
-    toCtx.fillRect(x + xx*TILE_SIZE*scale, y + yy*TILE_SIZE*scale, TILE_SIZE*scale, TILE_SIZE*scale);
+  if (mapTexture.complete && mapTexture.naturalWidth > 0) toCtx.drawImage(mapTexture, x, y, size, size);
+  else {
+    const scale = size / (MAP[0].length * TILE_SIZE);
+    for (let yy=0; yy<MAP.length; yy++) for (let xx=0; xx<MAP[0].length; xx++) {
+      toCtx.fillStyle = MAP[yy][xx] ? "#d3d3d3" : "#9f1f2b";
+      toCtx.fillRect(x + xx*TILE_SIZE*scale, y + yy*TILE_SIZE*scale, TILE_SIZE*scale, TILE_SIZE*scale);
+    }
   }
   const px = x + player.x * (size / worldWidth), py = y + player.y * (size / worldHeight);
   toCtx.fillStyle = "#2cff6e"; toCtx.beginPath(); toCtx.arc(px, py, 4, 0, Math.PI*2); toCtx.fill();
@@ -726,6 +822,7 @@ document.getElementById("settingsBtn").addEventListener("click", () => openPopup
 document.getElementById("storeBtn").addEventListener("click", () => openPopup("storePopup"));
 document.getElementById("scoreboardBtn").addEventListener("click", () => { refreshProfileStats(); openPopup("scorePopup"); });
 document.querySelectorAll("[data-close]").forEach(btn => btn.addEventListener("click", closeAllPopups));
+mainMenu.querySelectorAll("button").forEach(btn => btn.addEventListener("click", playButtonSound));
 
 document.getElementById("resumeBtn").addEventListener("click", togglePause);
 document.getElementById("restartBtn").addEventListener("click", () => { resetRun(); pauseMenu.classList.remove("visible"); enterGame(); });
@@ -740,12 +837,21 @@ document.getElementById("exitBtn").addEventListener("click", () => {
 });
 
 document.getElementById("soundToggle").addEventListener("change", e => { game.settings.sound = e.target.value; saveGame(); });
+document.getElementById("soundToggle").addEventListener("change", () => {
+  updateMenuMusicState();
+  updateWalkSound();
+  if (!isSoundOn()) tryPause(audio.reload);
+});
 document.getElementById("languageSelect").addEventListener("change", e => { game.settings.language = e.target.value; applyLanguage(); saveGame(); });
 document.getElementById("difficultySelect").addEventListener("change", e => { game.settings.difficulty = e.target.value; saveGame(); });
 
 if (!loadGame()) { syncSettingsControls(); refreshProfileStats(); applyLanguage(); }
 updateAmmoHud();
 openMainMenu();
+fade.style.transition = "opacity .6s ease";
+fade.style.opacity = "1";
+requestAnimationFrame(() => { requestAnimationFrame(() => { fade.style.opacity = "0"; }); });
+updateMenuMusicState();
 
 let last = performance.now();
 function loop(now) {
