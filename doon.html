@@ -25,7 +25,7 @@
     left: 50%;
     transform: translateX(-50%);
     color: #000;
-    font-size: clamp(24px, 3.2vw, 44px);
+    font-size: clamp(48px, 6.4vw, 88px);
     font-weight: 900;
     letter-spacing: 2px;
     text-shadow:
@@ -38,12 +38,14 @@
 
   @keyframes titlePulse {
     0%, 100% {
+      transform: translateX(-50%) scale(1);
       opacity: .82;
       filter: drop-shadow(0 0 0 rgba(0,0,0,0));
     }
     50% {
+      transform: translateX(-50%) scale(1.08);
       opacity: 1;
-      filter: drop-shadow(0 0 6px rgba(0,0,0,.42));
+      filter: drop-shadow(0 0 12px rgba(0,0,0,.55));
     }
   }
 
@@ -316,18 +318,18 @@ const game = {
   settings:{ sound:"on", language:"hu", difficulty:"normal" },
   mapOpen:false,
   autoFire:false,
-  time:0,
-  tracers:[]
+  time:0
 };
 
 const keys = Object.create(null);
 
 const weapon = {
-  recoil:0, muzzleFlash:0,
+  recoil:0,
   clipSize:20, ammoInClip:20, reserveAmmo:100,
   reloading:false, reloadTimer:0, reloadTime:1.15,
   fireCooldown:0, autoRate:0.09, semiRate:0.24
 };
+const FLOOR_PATTERN_WORLD_SIZE = 42;
 
 const floorTexture = new Image();
 const wallTexture = new Image();
@@ -381,12 +383,15 @@ function playOneShotFrom(template) {
   } catch {}
 }
 function updateMenuMusicState() {
-  if (isSoundOn()) tryPlay(audio.menuMusic);
-  else tryPause(audio.menuMusic);
+  if (isSoundOn() && game.state === "menu") {
+    tryPlay(audio.menuMusic);
+    return;
+  }
+  tryPause(audio.menuMusic);
+  audio.menuMusic.currentTime = 0;
 }
 function activateSoundtrack() {
-  if (!isSoundOn()) return;
-  tryPlay(audio.menuMusic);
+  updateMenuMusicState();
 }
 
 function updateWalkSound() {
@@ -477,7 +482,7 @@ function refreshProfileStats() { lastScoreEl.textContent = String(game.score); t
 
 function resetRun() {
   Object.assign(player, {x:TILE_SIZE*1.6, y:TILE_SIZE*1.6, angle:0, pitch:0, z:0, velocityZ:0, isGrounded:true, crouchLocked:false, eyeHeight:PLAYER_HEIGHT});
-  game.score = 0; game.mapOpen = false; game.tracers = [];
+  game.score = 0; game.mapOpen = false;
   weapon.ammoInClip = weapon.clipSize; weapon.reserveAmmo = 100; weapon.reloading = false; weapon.reloadTimer = 0;
   updateAmmoHud(); refreshProfileStats(); saveGame();
 }
@@ -553,11 +558,8 @@ function fireWeapon() {
   if (weapon.reloading || weapon.ammoInClip <= 0 || game.state !== "playing" || weapon.fireCooldown > 0) return;
   weapon.ammoInClip -= 1;
   weapon.recoil = 1;
-  weapon.muzzleFlash = 0.08;
   weapon.fireCooldown = game.autoFire ? weapon.autoRate : weapon.semiRate;
   game.totalShots += 1; game.score += 10;
-  game.tracers.push({ life:0.06, len: 80 + Math.random()*40, xJ:(Math.random()-0.5)*10, yJ:(Math.random()-0.5)*8 });
-  if (game.tracers.length > 6) game.tracers.shift();
   playOneShotFrom(audio.shotTemplate);
   updateAmmoHud();
   if (weapon.ammoInClip === 0) startReload();
@@ -626,7 +628,6 @@ function updatePlayer(dt) {
   if (player.z <= 0) { player.z = 0; player.velocityZ = 0; player.isGrounded = true; }
 
   weapon.recoil = Math.max(0, weapon.recoil - dt * 7);
-  weapon.muzzleFlash = Math.max(0, weapon.muzzleFlash - dt);
   weapon.fireCooldown = Math.max(0, weapon.fireCooldown - dt);
 
   if (game.autoFire && keys["mouse0"]) fireWeapon();
@@ -645,8 +646,6 @@ function updatePlayer(dt) {
     }
   }
 
-  game.tracers.forEach(t => t.life -= dt);
-  game.tracers = game.tracers.filter(t => t.life > 0);
 }
 
 document.addEventListener("mousedown", e => { if (e.button===0) keys["mouse0"]=true; });
@@ -716,10 +715,10 @@ function renderFloorAndSky() {
     const shade = Math.max(0.2, 1 - rowDistance / 2500);
 
     for (let x=0; x<canvas.width; x++) {
-      const tx = ((Math.floor(floorX) % TILE_SIZE + TILE_SIZE) % TILE_SIZE) / TILE_SIZE;
-      const ty = ((Math.floor(floorY) % TILE_SIZE + TILE_SIZE) % TILE_SIZE) / TILE_SIZE;
-      const sx = Math.floor(tx * floorTexW) % floorTexW;
-      const sy = Math.floor(ty * floorTexH) % floorTexH;
+      const u = floorX / FLOOR_PATTERN_WORLD_SIZE;
+      const v = floorY / FLOOR_PATTERN_WORLD_SIZE;
+      const sx = ((Math.floor(u * floorTexW) % floorTexW) + floorTexW) % floorTexW;
+      const sy = ((Math.floor(v * floorTexH) % floorTexH) + floorTexH) % floorTexH;
       const src = (sy * floorTexW + sx) * 4;
       const di = (y * canvas.width + x) * 4;
       dst[di] = floorPixels[src] * shade;
@@ -776,33 +775,13 @@ function renderWeapon() {
   const breath = Math.sin(game.time * 2.6) * 4;
   const recoil = weapon.recoil * 28;
   const x = canvas.width - gunW * 0.9 + Math.sin(game.time * 1.8) * 2;
-  const y = canvas.height - gunH * 0.78 + recoil + breath;
-  const muzzleX = x + gunW * 0.84;
-  const muzzleY = y + gunH * 0.22;
+  const y = canvas.height - gunH * 1.12 + recoil + breath;
 
   if (gunTexture.complete && gunTexture.naturalWidth > 0) {
     ctx.drawImage(gunTexture, x, y, gunW, gunH);
   } else {
     ctx.fillStyle = "#36424f";
     ctx.fillRect(x, y, gunW, gunH);
-  }
-
-  if (weapon.muzzleFlash > 0) {
-    const alpha = Math.min(0.8, weapon.muzzleFlash * 9);
-    ctx.fillStyle = `rgba(255,210,120,${alpha})`;
-    ctx.beginPath();
-    ctx.ellipse(muzzleX, muzzleY, gunW * 0.1, gunH * 0.22, 0, 0, Math.PI*2);
-    ctx.fill();
-  }
-
-  for (const tr of game.tracers) {
-    const p = tr.life / 0.06;
-    ctx.strokeStyle = `rgba(255,230,170,${0.35 + p * 0.45})`;
-    ctx.lineWidth = 2 + p;
-    ctx.beginPath();
-    ctx.moveTo(muzzleX + tr.xJ, muzzleY + tr.yJ);
-    ctx.lineTo(muzzleX + tr.xJ, muzzleY + tr.yJ - tr.len * p);
-    ctx.stroke();
   }
 
   ctx.fillStyle = "rgba(255,255,255,.8)";
