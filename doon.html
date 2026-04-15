@@ -325,6 +325,8 @@ const ENEMY_SPEED = 92;
 const ENEMY_ATTACK_RANGE = TILE_SIZE * 5.5;
 const ENEMY_FIRE_COOLDOWN = 1.1;
 const MAX_PLAYER_HP = 100;
+const ENEMY_VISUAL_HEIGHT = 1.35;
+const ENEMY_VISUAL_WIDTH = 0.72;
 
 const MAP = [
   "111111111111111111111111",
@@ -385,6 +387,15 @@ floorTexture.onerror = () => { floorTexture.src = "wood.png"; };
 wallTexture.src = "wall.png";
 gunTexture.src = "gun.png";
 mapTexture.src = "map.png";
+
+const demonRenderState = {
+  ready: false,
+  failed: false,
+  sourceCanvas: null,
+  update: null
+};
+
+initDemonRenderer().catch(() => { demonRenderState.failed = true; });
 
 const audio = {
   menuMusic: new Audio("soundtrack.mp3"),
@@ -461,6 +472,103 @@ floorTexture.onload = () => {
   try { floorPattern = ctx.createPattern(floorTexture, "repeat"); }
   catch { floorPattern = null; }
 };
+
+async function initDemonRenderer() {
+  const sourceCanvas = document.createElement("canvas");
+  sourceCanvas.width = 256;
+  sourceCanvas.height = 256;
+  demonRenderState.sourceCanvas = sourceCanvas;
+
+  const threeMod = await import("https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js");
+  const fbxMod = await import("https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/loaders/FBXLoader.js");
+
+  const THREE = threeMod;
+  const renderer = new THREE.WebGLRenderer({
+    canvas: sourceCanvas,
+    alpha: true,
+    antialias: true,
+    preserveDrawingBuffer: true
+  });
+  renderer.setPixelRatio(1);
+  renderer.setSize(sourceCanvas.width, sourceCanvas.height, false);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(33, 1, 0.1, 100);
+  camera.position.set(0, 1.05, 2.7);
+
+  const ambient = new THREE.AmbientLight(0xffffff, 1.18);
+  scene.add(ambient);
+  const key = new THREE.DirectionalLight(0xffd3d3, 1.12);
+  key.position.set(2.8, 4, 3);
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0x66b8ff, 0.72);
+  rim.position.set(-3.5, 1.4, -2.8);
+  scene.add(rim);
+
+  let mixer = null;
+  let demon = null;
+
+  const loader = new fbxMod.FBXLoader();
+  loader.load(
+    "Cute_Demon.fbx",
+    (obj) => {
+      demon = obj;
+      demon.traverse((child) => {
+        if (child.isMesh && child.material) {
+          child.castShadow = false;
+          child.receiveShadow = false;
+          child.frustumCulled = false;
+        }
+      });
+      const box = new THREE.Box3().setFromObject(demon);
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x || 1, size.y || 1, size.z || 1);
+      const scale = 1.35 / maxDim;
+      demon.scale.setScalar(scale);
+
+      const scaledBox = new THREE.Box3().setFromObject(demon);
+      const center = scaledBox.getCenter(new THREE.Vector3());
+      const min = scaledBox.min.clone();
+      demon.position.sub(center);
+      demon.position.y -= min.y;
+
+      scene.add(demon);
+
+      if (Array.isArray(demon.animations) && demon.animations.length) {
+        mixer = new THREE.AnimationMixer(demon);
+        const clip = demon.animations[0];
+        const action = mixer.clipAction(clip);
+        action.play();
+      }
+
+      demonRenderState.ready = true;
+      demonRenderState.failed = false;
+    },
+    undefined,
+    () => {
+      demonRenderState.failed = true;
+    }
+  );
+
+  demonRenderState.update = (dt) => {
+    if (!demonRenderState.ready || !demon) return;
+    if (mixer) mixer.update(Math.min(0.05, Math.max(0, dt)));
+    demon.rotation.y += dt * 0.85;
+    renderer.render(scene, camera);
+  };
+}
+
+function updateDemonRenderer(dt) {
+  if (typeof demonRenderState.update === "function") demonRenderState.update(dt);
+}
+
+function drawEnemyWithDemonSprite(left, top, spriteW, spriteH) {
+  const source = demonRenderState.sourceCanvas;
+  if (!demonRenderState.ready || !source) return false;
+  ctx.drawImage(source, left, top, spriteW, spriteH);
+  return true;
+}
 
 function t(k){ return (i18n[game.settings.language] || i18n.hu)[k] || k; }
 function applyLanguage() {
@@ -1048,21 +1156,30 @@ function renderEnemies() {
     if (Math.abs(rel) > fov * 0.7 || dist < 8) continue;
     const corrected = dist * Math.cos(rel);
     const screenX = (0.5 + rel / fov) * canvas.width;
-    const spriteH = (WALL_HEIGHT / Math.max(1, corrected)) * projDist * 0.72;
-    const spriteW = spriteH * 0.56;
+    const spriteH = (WALL_HEIGHT / Math.max(1, corrected)) * projDist * ENEMY_VISUAL_HEIGHT;
+    const spriteW = spriteH * ENEMY_VISUAL_WIDTH;
     const baseY = horizon + (eye / Math.max(1, corrected)) * projDist;
     const top = baseY - spriteH;
     const left = screenX - spriteW / 2;
     const right = screenX + spriteW / 2;
 
+    let visible = false;
     for (let sx = Math.max(0, Math.floor(left)); sx <= Math.min(canvas.width - 1, Math.ceil(right)); sx++) {
-      if (corrected > wallDepthBuffer[sx]) continue;
-      const nx = (sx - left) / Math.max(1, spriteW);
-      if (nx < 0 || nx > 1) continue;
-      const centerBias = 1 - Math.abs(nx - 0.5) * 1.35;
-      const shade = Math.max(0.15, 1 - corrected / 1500);
-      ctx.fillStyle = `rgba(${Math.floor(200 * shade)},${Math.floor(40 + 80 * centerBias * shade)},${Math.floor(50 + 90 * centerBias * shade)},0.95)`;
-      ctx.fillRect(sx, top, 1, spriteH);
+      if (corrected <= wallDepthBuffer[sx]) { visible = true; break; }
+    }
+    if (!visible) continue;
+
+    const drewDemon = drawEnemyWithDemonSprite(left, top, spriteW, spriteH);
+    if (!drewDemon) {
+      for (let sx = Math.max(0, Math.floor(left)); sx <= Math.min(canvas.width - 1, Math.ceil(right)); sx++) {
+        if (corrected > wallDepthBuffer[sx]) continue;
+        const nx = (sx - left) / Math.max(1, spriteW);
+        if (nx < 0 || nx > 1) continue;
+        const centerBias = 1 - Math.abs(nx - 0.5) * 1.35;
+        const shade = Math.max(0.15, 1 - corrected / 1500);
+        ctx.fillStyle = `rgba(${Math.floor(200 * shade)},${Math.floor(40 + 80 * centerBias * shade)},${Math.floor(50 + 90 * centerBias * shade)},0.95)`;
+        ctx.fillRect(sx, top, 1, spriteH);
+      }
     }
 
     const hpRatio = Math.max(0, enemy.hp / 100);
@@ -1297,6 +1414,7 @@ let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
   updatePlayer(dt);
+  updateDemonRenderer(dt);
   renderFloorAndSky();
   renderWalls();
   renderEnemies();
