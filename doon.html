@@ -145,12 +145,10 @@
 
   #bigMap {
     position: fixed;
-    inset: 6vh 6vw;
+    inset: 0;
     z-index: 40;
-    border: 1px solid rgba(255,255,255,.28);
-    border-radius: 14px;
     overflow: hidden;
-    background: rgba(0,0,0,.7);
+    background: rgba(0,0,0,.78);
     display: none;
   }
 
@@ -275,8 +273,8 @@ const i18n = {
 function resize() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-  bigMapCanvas.width = Math.floor(window.innerWidth * 0.88);
-  bigMapCanvas.height = Math.floor(window.innerHeight * 0.88);
+  bigMapCanvas.width = window.innerWidth;
+  bigMapCanvas.height = window.innerHeight;
 }
 window.addEventListener("resize", resize);
 resize();
@@ -308,6 +306,9 @@ const MAP = [
 
 const worldWidth = MAP[0].length * TILE_SIZE;
 const worldHeight = MAP.length * TILE_SIZE;
+
+const MINIMAP_ROTATION_OFFSET = 0; // radians, pl. Math.PI / 2 ha a map textúra 90°-kal eltér
+const MINIMAP_FLIP_Y = false; // true, ha a textúra Y tengelye fordított
 
 const player = { x:TILE_SIZE*1.6, y:TILE_SIZE*1.6, angle:0, pitch:0, z:0, velocityZ:0, isGrounded:true, crouchLocked:false, eyeHeight:PLAYER_HEIGHT };
 
@@ -810,27 +811,69 @@ function renderWeapon() {
   ctx.fillText(game.autoFire ? "FIRE MODE: AUTO" : "FIRE MODE: SEMI", x + 16, y + gunH + 18);
 }
 
-function renderMinimap(toCtx = ctx, x=16, y=16, size=Math.min(canvas.width*0.26, 340)) {
-  toCtx.fillStyle = "rgba(0,0,0,.45)";
-  toCtx.fillRect(x - 8, y - 8, size + 16, size + 16);
-  if (mapTexture.complete && mapTexture.naturalWidth > 0) toCtx.drawImage(mapTexture, x, y, size, size);
+function worldToMinimapUV(worldX, worldY) {
+  let u = worldX / worldWidth;
+  let v = worldY / worldHeight;
+
+  if (MINIMAP_FLIP_Y) v = 1 - v;
+
+  const cx = u - 0.5;
+  const cy = v - 0.5;
+  const c = Math.cos(MINIMAP_ROTATION_OFFSET);
+  const s = Math.sin(MINIMAP_ROTATION_OFFSET);
+
+  return {
+    u: cx * c - cy * s + 0.5,
+    v: cx * s + cy * c + 0.5
+  };
+}
+
+function worldToMinimapPoint(worldX, worldY, x, y, width, height) {
+  const uv = worldToMinimapUV(worldX, worldY);
+  return { x: x + uv.u * width, y: y + uv.v * height };
+}
+
+function renderMinimap(toCtx = ctx, x=16, y=16, width=Math.min(canvas.width*0.26, 340), height=width, drawBackdrop=true) {
+  if (drawBackdrop) {
+    toCtx.fillStyle = "rgba(0,0,0,.45)";
+    toCtx.fillRect(x - 8, y - 8, width + 16, height + 16);
+  }
+
+  if (mapTexture.complete && mapTexture.naturalWidth > 0) toCtx.drawImage(mapTexture, x, y, width, height);
   else {
-    const scale = size / (MAP[0].length * TILE_SIZE);
+    const scaleX = width / worldWidth;
+    const scaleY = height / worldHeight;
     for (let yy=0; yy<MAP.length; yy++) for (let xx=0; xx<MAP[0].length; xx++) {
       toCtx.fillStyle = MAP[yy][xx] ? "#d3d3d3" : "#9f1f2b";
-      toCtx.fillRect(x + xx*TILE_SIZE*scale, y + yy*TILE_SIZE*scale, TILE_SIZE*scale, TILE_SIZE*scale);
+      toCtx.fillRect(x + xx*TILE_SIZE*scaleX, y + yy*TILE_SIZE*scaleY, TILE_SIZE*scaleX, TILE_SIZE*scaleY);
     }
   }
-  const px = x + player.x * (size / worldWidth), py = y + player.y * (size / worldHeight);
-  toCtx.fillStyle = "#2cff6e"; toCtx.beginPath(); toCtx.arc(px, py, 4, 0, Math.PI*2); toCtx.fill();
-  toCtx.strokeStyle = "#2cff6e"; toCtx.lineWidth = 2;
-  toCtx.beginPath(); toCtx.moveTo(px, py); toCtx.lineTo(px + Math.cos(player.angle)*14, py + Math.sin(player.angle)*14); toCtx.stroke();
+
+  const p = worldToMinimapPoint(player.x, player.y, x, y, width, height);
+  toCtx.fillStyle = "#2cff6e";
+  toCtx.beginPath();
+  toCtx.arc(p.x, p.y, 4, 0, Math.PI*2);
+  toCtx.fill();
+
+  const lookAhead = TILE_SIZE * 0.9;
+  const f = worldToMinimapPoint(
+    player.x + Math.cos(player.angle) * lookAhead,
+    player.y + Math.sin(player.angle) * lookAhead,
+    x, y, width, height
+  );
+
+  toCtx.strokeStyle = "#2cff6e";
+  toCtx.lineWidth = 2;
+  toCtx.beginPath();
+  toCtx.moveTo(p.x, p.y);
+  toCtx.lineTo(f.x, f.y);
+  toCtx.stroke();
   toCtx.lineWidth = 1;
 }
 
 function renderBigMap() {
   bigMapCtx.clearRect(0,0,bigMapCanvas.width,bigMapCanvas.height);
-  renderMinimap(bigMapCtx, 24, 24, Math.min(bigMapCanvas.width, bigMapCanvas.height) - 48);
+  renderMinimap(bigMapCtx, 0, 0, bigMapCanvas.width, bigMapCanvas.height, false);
 }
 
 function renderPausedDim() {
