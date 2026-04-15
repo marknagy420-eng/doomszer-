@@ -381,9 +381,14 @@ function playOneShotFrom(template) {
   } catch {}
 }
 function updateMenuMusicState() {
-  if (game.state === "menu" && mainMenu.classList.contains("visible") && isSoundOn()) tryPlay(audio.menuMusic);
+  if (isSoundOn()) tryPlay(audio.menuMusic);
   else tryPause(audio.menuMusic);
 }
+function activateSoundtrack() {
+  if (!isSoundOn()) return;
+  tryPlay(audio.menuMusic);
+}
+
 function updateWalkSound() {
   const walking = game.state === "playing" && MOVE_KEYS.some(k => keys[k]);
   if (!walking || !isSoundOn()) {
@@ -394,15 +399,21 @@ function updateWalkSound() {
 }
 function playButtonSound() { playOneShotFrom(audio.buttonTemplate); }
 
-let floorPixels = null, floorTexW = 0, floorTexH = 0;
+let floorPixels = null, floorTexW = 0, floorTexH = 0, floorPattern = null;
 floorTexture.onload = () => {
-  const tmp = document.createElement("canvas");
   floorTexW = floorTexture.naturalWidth || floorTexture.width;
   floorTexH = floorTexture.naturalHeight || floorTexture.height;
-  tmp.width = floorTexW; tmp.height = floorTexH;
-  const tctx = tmp.getContext("2d");
-  tctx.drawImage(floorTexture, 0, 0);
-  floorPixels = tctx.getImageData(0, 0, floorTexW, floorTexH).data;
+  try {
+    const tmp = document.createElement("canvas");
+    tmp.width = floorTexW; tmp.height = floorTexH;
+    const tctx = tmp.getContext("2d");
+    tctx.drawImage(floorTexture, 0, 0);
+    floorPixels = tctx.getImageData(0, 0, floorTexW, floorTexH).data;
+  } catch {
+    floorPixels = null;
+  }
+  try { floorPattern = ctx.createPattern(floorTexture, "repeat"); }
+  catch { floorPattern = null; }
 };
 
 function t(k){ return (i18n[game.settings.language] || i18n.hu)[k] || k; }
@@ -665,8 +676,18 @@ function renderFloorAndSky() {
   ctx.fillStyle = sky; ctx.fillRect(0, 0, canvas.width, horizon);
 
   if (!floorPixels || !floorTexW || !floorTexH) {
-    ctx.fillStyle = "#594833";
-    ctx.fillRect(0, horizon, canvas.width, canvas.height - horizon);
+    if (floorPattern) {
+      ctx.fillStyle = floorPattern;
+      ctx.fillRect(0, horizon, canvas.width, canvas.height - horizon);
+      const floorShade = ctx.createLinearGradient(0, horizon, 0, canvas.height);
+      floorShade.addColorStop(0, "rgba(0,0,0,0.03)");
+      floorShade.addColorStop(1, "rgba(0,0,0,0.35)");
+      ctx.fillStyle = floorShade;
+      ctx.fillRect(0, horizon, canvas.width, canvas.height - horizon);
+    } else {
+      ctx.fillStyle = "#594833";
+      ctx.fillRect(0, horizon, canvas.width, canvas.height - horizon);
+    }
     return;
   }
 
@@ -754,8 +775,10 @@ function renderWeapon() {
   const gunH = gunW * 0.62;
   const breath = Math.sin(game.time * 2.6) * 4;
   const recoil = weapon.recoil * 28;
-  const x = canvas.width * .5 - gunW * .5 + Math.sin(game.time * 1.8) * 2;
-  const y = canvas.height - gunH * 0.88 + recoil + breath;
+  const x = canvas.width - gunW * 0.9 + Math.sin(game.time * 1.8) * 2;
+  const y = canvas.height - gunH * 0.78 + recoil + breath;
+  const muzzleX = x + gunW * 0.84;
+  const muzzleY = y + gunH * 0.22;
 
   if (gunTexture.complete && gunTexture.naturalWidth > 0) {
     ctx.drawImage(gunTexture, x, y, gunW, gunH);
@@ -768,7 +791,7 @@ function renderWeapon() {
     const alpha = Math.min(0.8, weapon.muzzleFlash * 9);
     ctx.fillStyle = `rgba(255,210,120,${alpha})`;
     ctx.beginPath();
-    ctx.ellipse(canvas.width * 0.5, y - gunH * 0.08, gunW * 0.1, gunH * 0.22, 0, 0, Math.PI*2);
+    ctx.ellipse(muzzleX, muzzleY, gunW * 0.1, gunH * 0.22, 0, 0, Math.PI*2);
     ctx.fill();
   }
 
@@ -777,8 +800,8 @@ function renderWeapon() {
     ctx.strokeStyle = `rgba(255,230,170,${0.35 + p * 0.45})`;
     ctx.lineWidth = 2 + p;
     ctx.beginPath();
-    ctx.moveTo(canvas.width * .5 + tr.xJ, canvas.height * .62 + tr.yJ);
-    ctx.lineTo(canvas.width * .5 + tr.xJ, canvas.height * .62 + tr.yJ - tr.len * p);
+    ctx.moveTo(muzzleX + tr.xJ, muzzleY + tr.yJ);
+    ctx.lineTo(muzzleX + tr.xJ, muzzleY + tr.yJ - tr.len * p);
     ctx.stroke();
   }
 
@@ -816,17 +839,17 @@ function renderPausedDim() {
   ctx.fillRect(0,0,canvas.width,canvas.height);
 }
 
-document.getElementById("newGameBtn").addEventListener("click", () => withFade(() => { resetRun(); enterGame(); }));
-document.getElementById("continueBtn").addEventListener("click", () => withFade(() => { loadGame(); enterGame(); }));
+document.getElementById("newGameBtn").addEventListener("click", () => { activateSoundtrack(); withFade(() => { resetRun(); enterGame(); }); });
+document.getElementById("continueBtn").addEventListener("click", () => { activateSoundtrack(); withFade(() => { loadGame(); enterGame(); }); });
 document.getElementById("settingsBtn").addEventListener("click", () => openPopup("settingsPopup"));
 document.getElementById("storeBtn").addEventListener("click", () => openPopup("storePopup"));
 document.getElementById("scoreboardBtn").addEventListener("click", () => { refreshProfileStats(); openPopup("scorePopup"); });
 document.querySelectorAll("[data-close]").forEach(btn => btn.addEventListener("click", closeAllPopups));
 mainMenu.querySelectorAll("button").forEach(btn => btn.addEventListener("click", playButtonSound));
 
-document.getElementById("resumeBtn").addEventListener("click", togglePause);
-document.getElementById("restartBtn").addEventListener("click", () => { resetRun(); pauseMenu.classList.remove("visible"); enterGame(); });
-document.getElementById("toMenuBtn").addEventListener("click", () => { saveGame(); withFade(openMainMenu); });
+document.getElementById("resumeBtn").addEventListener("click", () => { activateSoundtrack(); togglePause(); });
+document.getElementById("restartBtn").addEventListener("click", () => { activateSoundtrack(); resetRun(); pauseMenu.classList.remove("visible"); enterGame(); });
+document.getElementById("toMenuBtn").addEventListener("click", () => { activateSoundtrack(); saveGame(); withFade(openMainMenu); });
 document.getElementById("exitBtn").addEventListener("click", () => {
   saveGame();
   withFade(() => {
