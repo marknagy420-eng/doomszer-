@@ -300,6 +300,8 @@ const PLAYER_HEIGHT = 70;
 const CAMERA_FOV = Math.PI / 3;
 const CAMERA_HORIZON_OFFSET = 8;
 const FLOOR_UV_REPEAT = 4.5;
+const FLOOR_PATTERN_SCALE = 0.14;
+const FLOOR_WALL_BLEND_RANGE = TILE_SIZE * 0.42;
 
 const MAP = [
   "111111111111111111111111",
@@ -613,6 +615,42 @@ canvas.addEventListener("mousedown", (e) => { if (e.button === 0 && document.poi
 function mapAtCell(cx, cy) { if (cy < 0 || cy >= MAP.length || cx < 0 || cx >= MAP[0].length) return 1; return MAP[cy][cx]; }
 function isWallAt(x, y) { const cx = Math.floor(x / TILE_SIZE); const cy = Math.floor(y / TILE_SIZE); return mapAtCell(cx, cy) === 1; }
 
+function floorPatternSample(worldX, worldY, rowDistance) {
+  const cellX = Math.floor(worldX / TILE_SIZE);
+  const cellY = Math.floor(worldY / TILE_SIZE);
+  const localX = ((worldX % TILE_SIZE) + TILE_SIZE) % TILE_SIZE;
+  const localY = ((worldY % TILE_SIZE) + TILE_SIZE) % TILE_SIZE;
+
+  const nearLeft = localX;
+  const nearRight = TILE_SIZE - localX;
+  const nearTop = localY;
+  const nearBottom = TILE_SIZE - localY;
+
+  let nearestWallDist = Infinity;
+  if (mapAtCell(cellX - 1, cellY) === 1) nearestWallDist = Math.min(nearestWallDist, nearLeft);
+  if (mapAtCell(cellX + 1, cellY) === 1) nearestWallDist = Math.min(nearestWallDist, nearRight);
+  if (mapAtCell(cellX, cellY - 1) === 1) nearestWallDist = Math.min(nearestWallDist, nearTop);
+  if (mapAtCell(cellX, cellY + 1) === 1) nearestWallDist = Math.min(nearestWallDist, nearBottom);
+
+  let wallBlend = 0;
+  if (nearestWallDist !== Infinity) {
+    wallBlend = 1 - Math.min(1, nearestWallDist / FLOOR_WALL_BLEND_RANGE);
+    wallBlend = wallBlend * wallBlend;
+  }
+
+  const bandsX = Math.sin((worldX * FLOOR_PATTERN_SCALE) + cellY * 0.58);
+  const bandsY = Math.cos((worldY * FLOOR_PATTERN_SCALE * 1.07) - cellX * 0.63);
+  const pattern = 0.88 + (bandsX * bandsY) * 0.16;
+  const distanceFade = Math.max(0.35, 1 - rowDistance / 3200);
+
+  return {
+    darken: wallBlend * 0.55,
+    tintR: (1 + wallBlend * 0.06) * pattern * distanceFade,
+    tintG: (1 - wallBlend * 0.08) * pattern * distanceFade,
+    tintB: (1 - wallBlend * 0.16) * pattern * distanceFade
+  };
+}
+
 function tryMove(nx, ny) {
   const r = PLAYER_RADIUS;
   const canX = !isWallAt(nx+r,player.y)&&!isWallAt(nx-r,player.y)&&!isWallAt(nx,player.y+r)&&!isWallAt(nx,player.y-r);
@@ -750,9 +788,11 @@ function renderFloorAndSky() {
       const sy = Math.floor(ty * floorTexH) % floorTexH;
       const src = (sy * floorTexW + sx) * 4;
       const di = (y * canvas.width + x) * 4;
-      dst[di] = floorPixels[src] * shade;
-      dst[di + 1] = floorPixels[src + 1] * shade;
-      dst[di + 2] = floorPixels[src + 2] * shade;
+      const floorFx = floorPatternSample(floorX, floorY, rowDistance);
+      const baseShade = Math.max(0.12, shade * (1 - floorFx.darken));
+      dst[di] = Math.min(255, floorPixels[src] * baseShade * floorFx.tintR);
+      dst[di + 1] = Math.min(255, floorPixels[src + 1] * baseShade * floorFx.tintG);
+      dst[di + 2] = Math.min(255, floorPixels[src + 2] * baseShade * floorFx.tintB);
       dst[di + 3] = 255;
       floorX += stepX; floorY += stepY;
     }
