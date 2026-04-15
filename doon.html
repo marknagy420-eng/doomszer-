@@ -66,6 +66,18 @@
   .ammo-load { height: 16px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.28); box-shadow: 0 2px 12px rgba(0,0,0,.4); }
   #ammoFill { height: 100%; width: 100%; background: linear-gradient(90deg, #48ff9f, #17c9ff); transition: width .15s linear; }
 
+  .health-panel {
+    position: fixed;
+    left: 16px;
+    top: calc(min(26vw, 340px) + 60px);
+    width: min(340px, 26vw);
+    z-index: 21;
+    pointer-events: none;
+  }
+  #healthText { font-weight: 700; color: #fff; font-size: 15px; margin-bottom: 6px; display: block; }
+  .health-load { height: 14px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.28); box-shadow: 0 2px 12px rgba(0,0,0,.4); }
+  #healthFill { height: 100%; width: 100%; background: linear-gradient(90deg, #ff7a7a, #ff2c63); transition: width .12s linear; }
+
   .overlay { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; }
   .overlay.visible { display: flex; }
 
@@ -181,6 +193,10 @@
     </div>
     <div class="ammo-load"><div id="ammoFill"></div></div>
   </div>
+  <div class="health-panel">
+    <span id="healthText">Életerő: 100</span>
+    <div class="health-load"><div id="healthFill"></div></div>
+  </div>
 </div>
 
 <div id="mainMenu" class="overlay visible">
@@ -268,6 +284,8 @@ const mainMenu = document.getElementById("mainMenu");
 const pauseMenu = document.getElementById("pauseMenu");
 const ammoText = document.getElementById("ammoText");
 const ammoFill = document.getElementById("ammoFill");
+const healthText = document.getElementById("healthText");
+const healthFill = document.getElementById("healthFill");
 const fade = document.getElementById("fade");
 const bigMap = document.getElementById("bigMap");
 const lastScoreEl = document.getElementById("lastScore");
@@ -277,11 +295,11 @@ const STORAGE_KEY = "doomszer-save-v3";
 const MOVE_KEYS = ["w", "a", "s", "d"];
 
 const i18n = {
-  hu: { newGame:"Új játék",cont:"Folytatás",settings:"Beállítások",store:"Store",score:"Scoreboard", pause:"Szünet", pauseHint:"ESC: vissza a játékba", resume:"Folytatás", restart:"Újra", menu:"Menü", exit:"Kilépés", sound:"Hang", lang:"Nyelv", diff:"Nehézség", ammo:"Lőszer", soon:"Hamarosan.", last:"Legutóbbi pontszám", shots:"Összes lövés" },
-  en: { newGame:"New Game",cont:"Continue",settings:"Settings",store:"Store",score:"Scoreboard", pause:"Pause", pauseHint:"ESC: back to game", resume:"Resume", restart:"Restart", menu:"Menu", exit:"Exit", sound:"Sound", lang:"Language", diff:"Difficulty", ammo:"Ammo", soon:"Coming soon.", last:"Last score", shots:"Total shots" },
-  de: { newGame:"Neues Spiel",cont:"Fortsetzen",settings:"Einstellungen",store:"Store",score:"Bestenliste", pause:"Pause", pauseHint:"ESC: zurück ins Spiel", resume:"Fortsetzen", restart:"Neustart", menu:"Menü", exit:"Beenden", sound:"Sound", lang:"Sprache", diff:"Schwierigkeit", ammo:"Munition", soon:"Kommt bald.", last:"Letzter Punktestand", shots:"Gesamtschüsse" },
-  uk: { newGame:"Нова гра",cont:"Продовжити",settings:"Налаштування",store:"Магазин",score:"Таблиця", pause:"Пауза", pauseHint:"ESC: назад у гру", resume:"Продовжити", restart:"Перезапуск", menu:"Меню", exit:"Вихід", sound:"Звук", lang:"Мова", diff:"Складність", ammo:"Набої", soon:"Скоро.", last:"Останній рахунок", shots:"Усього пострілів" },
-  zh: { newGame:"新游戏",cont:"继续",settings:"设置",store:"商店",score:"排行榜", pause:"暂停", pauseHint:"ESC 返回游戏", resume:"继续", restart:"重新开始", menu:"菜单", exit:"退出", sound:"声音", lang:"语言", diff:"难度", ammo:"弹药", soon:"即将上线。", last:"上次得分", shots:"总射击" }
+  hu: { newGame:"Új játék",cont:"Folytatás",settings:"Beállítások",store:"Store",score:"Scoreboard", pause:"Szünet", pauseHint:"ESC: vissza a játékba", resume:"Folytatás", restart:"Újra", menu:"Menü", exit:"Kilépés", sound:"Hang", lang:"Nyelv", diff:"Nehézség", ammo:"Lőszer", hp:"Életerő", soon:"Hamarosan.", last:"Legutóbbi pontszám", shots:"Összes lövés", died:"Meghaltál! Új kör indul." },
+  en: { newGame:"New Game",cont:"Continue",settings:"Settings",store:"Store",score:"Scoreboard", pause:"Pause", pauseHint:"ESC: back to game", resume:"Resume", restart:"Restart", menu:"Menu", exit:"Exit", sound:"Sound", lang:"Language", diff:"Difficulty", ammo:"Ammo", hp:"Health", soon:"Coming soon.", last:"Last score", shots:"Total shots", died:"You died! Starting a new run." },
+  de: { newGame:"Neues Spiel",cont:"Fortsetzen",settings:"Einstellungen",store:"Store",score:"Bestenliste", pause:"Pause", pauseHint:"ESC: zurück ins Spiel", resume:"Fortsetzen", restart:"Neustart", menu:"Menü", exit:"Beenden", sound:"Sound", lang:"Sprache", diff:"Schwierigkeit", ammo:"Munition", hp:"Gesundheit", soon:"Kommt bald.", last:"Letzter Punktestand", shots:"Gesamtschüsse", died:"Du bist gestorben! Neue Runde startet." },
+  uk: { newGame:"Нова гра",cont:"Продовжити",settings:"Налаштування",store:"Магазин",score:"Таблиця", pause:"Пауза", pauseHint:"ESC: назад у гру", resume:"Продовжити", restart:"Перезапуск", menu:"Меню", exit:"Вихід", sound:"Звук", lang:"Мова", diff:"Складність", ammo:"Набої", hp:"Здоров'я", soon:"Скоро.", last:"Останній рахунок", shots:"Усього пострілів", died:"Вас убито! Починаємо новий забіг." },
+  zh: { newGame:"新游戏",cont:"继续",settings:"设置",store:"商店",score:"排行榜", pause:"暂停", pauseHint:"ESC 返回游戏", resume:"继续", restart:"重新开始", menu:"菜单", exit:"退出", sound:"声音", lang:"语言", diff:"难度", ammo:"弹药", hp:"生命值", soon:"即将上线。", last:"上次得分", shots:"总射击", died:"你已死亡！正在开始新一局。" }
 };
 
 function resize() {
@@ -302,6 +320,11 @@ const CAMERA_HORIZON_OFFSET = 8;
 const FLOOR_UV_REPEAT = 4.5;
 const FLOOR_PATTERN_SCALE = 0.14;
 const FLOOR_WALL_BLEND_RANGE = TILE_SIZE * 0.42;
+const ENEMY_RADIUS = 18;
+const ENEMY_SPEED = 92;
+const ENEMY_ATTACK_RANGE = TILE_SIZE * 5.5;
+const ENEMY_FIRE_COOLDOWN = 1.1;
+const MAX_PLAYER_HP = 100;
 
 const MAP = [
   "111111111111111111111111",
@@ -337,8 +360,12 @@ const game = {
   mapOpen:false,
   autoFire:false,
   time:0,
-  tracers:[]
+  tracers:[],
+  enemyTracers:[],
+  enemies:[],
+  playerHp:MAX_PLAYER_HP
 };
+let wallDepthBuffer = new Float32Array(0);
 
 const keys = Object.create(null);
 
@@ -458,6 +485,7 @@ function applyLanguage() {
   document.getElementById("storeBody").textContent = t("soon");
   document.getElementById("lastScoreLabel").textContent = t("last");
   document.getElementById("totalShotsLabel").textContent = t("shots");
+  updateHealthHud();
 }
 
 function saveGame() {
@@ -465,7 +493,9 @@ function saveGame() {
     score:game.score, totalShots:game.totalShots, settings:game.settings,
     player:{x:player.x,y:player.y,angle:player.angle,pitch:player.pitch},
     weapon:{ammoInClip:weapon.ammoInClip,reserveAmmo:weapon.reserveAmmo},
-    autoFire:game.autoFire
+    autoFire:game.autoFire,
+    playerHp:game.playerHp,
+    enemies:game.enemies
   }));
   refreshProfileStats();
 }
@@ -481,7 +511,14 @@ function loadGame() {
     Object.assign(player, d.player || {});
     if (d.weapon) { weapon.ammoInClip = Math.max(0, Math.min(weapon.clipSize, d.weapon.ammoInClip ?? weapon.clipSize)); weapon.reserveAmmo = Math.max(0, d.weapon.reserveAmmo ?? 100); }
     game.autoFire = !!d.autoFire;
+    game.playerHp = Math.max(0, Math.min(MAX_PLAYER_HP, d.playerHp ?? MAX_PLAYER_HP));
+    game.enemies = Array.isArray(d.enemies) ? d.enemies.filter(e => !e.dead).map(e => ({
+      id: e.id || Math.floor(Math.random() * 1e6),
+      x: e.x, y: e.y, hp: Math.max(0, e.hp ?? 100), shootCd: e.shootCd || 0, dead: false
+    })) : [];
+    if (!game.enemies.length) spawnEnemies();
     syncSettingsControls(); refreshProfileStats(); updateAmmoHud(); applyLanguage();
+    updateHealthHud();
     return true;
   } catch { return false; }
 }
@@ -496,9 +533,11 @@ function refreshProfileStats() { lastScoreEl.textContent = String(game.score); t
 
 function resetRun() {
   Object.assign(player, {x:TILE_SIZE*1.6, y:TILE_SIZE*1.6, angle:0, pitch:0, z:0, velocityZ:0, isGrounded:true, crouchLocked:false, eyeHeight:PLAYER_HEIGHT, velX:0, velY:0});
-  game.score = 0; game.mapOpen = false; game.tracers = [];
+  game.score = 0; game.mapOpen = false; game.tracers = []; game.enemyTracers = [];
+  game.playerHp = MAX_PLAYER_HP;
+  spawnEnemies();
   weapon.ammoInClip = weapon.clipSize; weapon.reserveAmmo = 100; weapon.reloading = false; weapon.reloadTimer = 0; weapon.reloadAnim = 0;
-  updateAmmoHud(); refreshProfileStats(); saveGame();
+  updateAmmoHud(); updateHealthHud(); refreshProfileStats(); saveGame();
 }
 
 function withFade(action) {
@@ -511,6 +550,9 @@ function withFade(action) {
 }
 
 function enterGame() {
+  if (!game.enemies.length) spawnEnemies();
+  if (game.playerHp <= 0) game.playerHp = MAX_PLAYER_HP;
+  updateHealthHud();
   game.state = "playing";
   closeAllPopups();
   mainMenu.classList.remove("visible");
@@ -560,6 +602,51 @@ function updateAmmoHud() {
   ammoFill.style.width = `${(weapon.ammoInClip / weapon.clipSize) * 100}%`;
 }
 
+function updateHealthHud() {
+  const hp = Math.max(0, Math.round(game.playerHp));
+  healthText.textContent = `${t("hp")}: ${hp}`;
+  healthFill.style.width = `${(hp / MAX_PLAYER_HP) * 100}%`;
+}
+
+function spawnEnemies() {
+  const candidates = [];
+  for (let y = 1; y < MAP.length - 1; y++) {
+    for (let x = 1; x < MAP[0].length - 1; x++) {
+      if (MAP[y][x] !== 0) continue;
+      const worldX = x * TILE_SIZE + TILE_SIZE * 0.5;
+      const worldY = y * TILE_SIZE + TILE_SIZE * 0.5;
+      if (Math.hypot(worldX - player.x, worldY - player.y) < TILE_SIZE * 3) continue;
+      candidates.push({ x: worldX, y: worldY });
+    }
+  }
+  for (let i = candidates.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+  }
+  game.enemies = candidates.slice(0, 10).map((p, idx) => ({
+    id: idx + 1,
+    x: p.x,
+    y: p.y,
+    hp: 100,
+    shootCd: Math.random() * ENEMY_FIRE_COOLDOWN,
+    dead: false
+  }));
+}
+
+function hasLineOfSight(fromX, fromY, toX, toY) {
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 1) return true;
+  const stepLen = 8;
+  const steps = Math.ceil(dist / stepLen);
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    if (isWallAt(fromX + dx * t, fromY + dy * t)) return false;
+  }
+  return true;
+}
+
 function startReload() {
   if (weapon.reloading || weapon.ammoInClip >= weapon.clipSize || weapon.reserveAmmo <= 0) return;
   weapon.reloading = true;
@@ -575,7 +662,7 @@ function fireWeapon() {
   weapon.recoil = 1;
   weapon.muzzleFlash = 0.08;
   weapon.fireCooldown = game.autoFire ? weapon.autoRate : weapon.semiRate;
-  game.totalShots += 1; game.score += 10;
+  game.totalShots += 1;
   game.tracers.push({
     age: 0,
     duration: 0.16,
@@ -586,6 +673,30 @@ function fireWeapon() {
   });
   if (game.tracers.length > 6) game.tracers.shift();
   playOneShotFrom(audio.shotTemplate);
+  let bestEnemy = null;
+  let bestT = Infinity;
+  const rayX = Math.cos(player.angle);
+  const rayY = Math.sin(player.angle);
+  for (const enemy of game.enemies) {
+    if (enemy.dead) continue;
+    const dx = enemy.x - player.x;
+    const dy = enemy.y - player.y;
+    const proj = dx * rayX + dy * rayY;
+    if (proj < 0 || proj > TILE_SIZE * 8) continue;
+    const perp = Math.abs(dx * rayY - dy * rayX);
+    if (perp > ENEMY_RADIUS * 1.3) continue;
+    if (!hasLineOfSight(player.x, player.y, enemy.x, enemy.y)) continue;
+    if (proj < bestT) { bestT = proj; bestEnemy = enemy; }
+  }
+  if (bestEnemy) {
+    bestEnemy.hp -= 40;
+    game.score += 20;
+    if (bestEnemy.hp <= 0) {
+      bestEnemy.dead = true;
+      game.score += 120;
+    }
+  }
+  game.enemies = game.enemies.filter(e => !e.dead);
   updateAmmoHud();
   if (weapon.ammoInClip === 0) startReload();
 }
@@ -738,6 +849,65 @@ function updatePlayer(dt) {
 
   game.tracers.forEach(t => t.age += dt);
   game.tracers = game.tracers.filter(t => t.age < t.duration);
+  game.enemyTracers.forEach(t => t.age += dt);
+  game.enemyTracers = game.enemyTracers.filter(t => t.age < t.duration);
+  updateEnemies(dt);
+}
+
+function canEnemyMoveTo(nx, ny) {
+  const r = ENEMY_RADIUS;
+  return !isWallAt(nx + r, ny) && !isWallAt(nx - r, ny) && !isWallAt(nx, ny + r) && !isWallAt(nx, ny - r);
+}
+
+function updateEnemies(dt) {
+  if (game.state !== "playing") return;
+  for (const enemy of game.enemies) {
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const dirX = dx / dist;
+    const dirY = dy / dist;
+    const canSeePlayer = hasLineOfSight(enemy.x, enemy.y, player.x, player.y);
+
+    if (dist > TILE_SIZE * 1.8 || !canSeePlayer) {
+      const nx = enemy.x + dirX * ENEMY_SPEED * dt;
+      const ny = enemy.y + dirY * ENEMY_SPEED * dt;
+      if (canEnemyMoveTo(nx, enemy.y)) enemy.x = nx;
+      if (canEnemyMoveTo(enemy.x, ny)) enemy.y = ny;
+    } else {
+      const sideX = -dirY;
+      const sideY = dirX;
+      const strafeDir = Math.sin(game.time * 1.7 + enemy.id) > 0 ? 1 : -1;
+      const nx = enemy.x + sideX * ENEMY_SPEED * dt * 0.75 * strafeDir;
+      const ny = enemy.y + sideY * ENEMY_SPEED * dt * 0.75 * strafeDir;
+      if (canEnemyMoveTo(nx, enemy.y)) enemy.x = nx;
+      if (canEnemyMoveTo(enemy.x, ny)) enemy.y = ny;
+    }
+
+    enemy.shootCd -= dt;
+    if (canSeePlayer && dist < ENEMY_ATTACK_RANGE && enemy.shootCd <= 0) {
+      enemy.shootCd = ENEMY_FIRE_COOLDOWN + Math.random() * 0.7;
+      const hitChance = Math.max(0.2, 0.84 - dist / (TILE_SIZE * 9));
+      if (Math.random() < hitChance) {
+        game.playerHp = Math.max(0, game.playerHp - (8 + Math.random() * 8));
+        updateHealthHud();
+      }
+      game.enemyTracers.push({
+        age: 0,
+        duration: 0.16,
+        fromX: enemy.x,
+        fromY: enemy.y,
+        toX: player.x + (Math.random() - 0.5) * 20,
+        toY: player.y + (Math.random() - 0.5) * 20
+      });
+      if (game.enemyTracers.length > 30) game.enemyTracers.shift();
+    }
+  }
+
+  if (game.playerHp <= 0) {
+    alert(t("died"));
+    resetRun();
+  }
 }
 
 document.addEventListener("mousedown", e => { if (e.button===0) keys["mouse0"]=true; });
@@ -832,12 +1002,14 @@ function renderFloorAndSky() {
 
 function renderWalls() {
   const { fov, projDist, horizon, eye } = getCameraParams();
+  if (wallDepthBuffer.length !== canvas.width) wallDepthBuffer = new Float32Array(canvas.width);
 
   for (let x=0; x<canvas.width; x++) {
     const t = x / canvas.width;
     const rayAngle = player.angle - fov/2 + t*fov;
     const hit = castRay(rayAngle);
     const correctedDist = hit.dist * Math.cos(rayAngle - player.angle);
+    wallDepthBuffer[x] = correctedDist;
     const wallScreenHeight = (WALL_HEIGHT / Math.max(1, correctedDist)) * projDist;
     const wallBottom = horizon + (eye / Math.max(1, correctedDist)) * projDist;
     const top = wallBottom - wallScreenHeight;
@@ -857,6 +1029,77 @@ function renderWalls() {
     ctx.fillStyle = `rgba(0,0,0,${fog})`;
     ctx.fillRect(x, top, 1, wallScreenHeight);
   }
+}
+
+function renderEnemies() {
+  const { fov, projDist, horizon, eye } = getCameraParams();
+  const sorted = [...game.enemies].sort((a, b) => {
+    const da = (a.x - player.x) ** 2 + (a.y - player.y) ** 2;
+    const db = (b.x - player.x) ** 2 + (b.y - player.y) ** 2;
+    return db - da;
+  });
+
+  for (const enemy of sorted) {
+    const dx = enemy.x - player.x;
+    const dy = enemy.y - player.y;
+    const dist = Math.hypot(dx, dy);
+    const angleToEnemy = Math.atan2(dy, dx) - player.angle;
+    const rel = Math.atan2(Math.sin(angleToEnemy), Math.cos(angleToEnemy));
+    if (Math.abs(rel) > fov * 0.7 || dist < 8) continue;
+    const corrected = dist * Math.cos(rel);
+    const screenX = (0.5 + rel / fov) * canvas.width;
+    const spriteH = (WALL_HEIGHT / Math.max(1, corrected)) * projDist * 0.72;
+    const spriteW = spriteH * 0.56;
+    const baseY = horizon + (eye / Math.max(1, corrected)) * projDist;
+    const top = baseY - spriteH;
+    const left = screenX - spriteW / 2;
+    const right = screenX + spriteW / 2;
+
+    for (let sx = Math.max(0, Math.floor(left)); sx <= Math.min(canvas.width - 1, Math.ceil(right)); sx++) {
+      if (corrected > wallDepthBuffer[sx]) continue;
+      const nx = (sx - left) / Math.max(1, spriteW);
+      if (nx < 0 || nx > 1) continue;
+      const centerBias = 1 - Math.abs(nx - 0.5) * 1.35;
+      const shade = Math.max(0.15, 1 - corrected / 1500);
+      ctx.fillStyle = `rgba(${Math.floor(200 * shade)},${Math.floor(40 + 80 * centerBias * shade)},${Math.floor(50 + 90 * centerBias * shade)},0.95)`;
+      ctx.fillRect(sx, top, 1, spriteH);
+    }
+
+    const hpRatio = Math.max(0, enemy.hp / 100);
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(left, top - 12, spriteW, 5);
+    ctx.fillStyle = `rgba(${Math.floor(255 * (1 - hpRatio))},${Math.floor(220 * hpRatio)},80,0.95)`;
+    ctx.fillRect(left, top - 12, spriteW * hpRatio, 5);
+  }
+}
+
+function renderEnemyTracers() {
+  const { fov, projDist, horizon, eye } = getCameraParams();
+  for (const tr of game.enemyTracers) {
+    const p1 = projectWorldPoint(tr.fromX, tr.fromY, eye, fov, projDist, horizon);
+    const p2 = projectWorldPoint(tr.toX, tr.toY, eye, fov, projDist, horizon);
+    if (!p1 || !p2) continue;
+    const a = 1 - tr.age / tr.duration;
+    ctx.strokeStyle = `rgba(255,70,70,${a * 0.8})`;
+    ctx.lineWidth = 1 + a * 2;
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+  }
+}
+
+function projectWorldPoint(worldX, worldY, eye, fov, projDist, horizon) {
+  const dx = worldX - player.x;
+  const dy = worldY - player.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 2) return null;
+  const rel = Math.atan2(Math.sin(Math.atan2(dy, dx) - player.angle), Math.cos(Math.atan2(dy, dx) - player.angle));
+  if (Math.abs(rel) > fov * 0.8) return null;
+  const corrected = dist * Math.cos(rel);
+  const x = (0.5 + rel / fov) * canvas.width;
+  const y = horizon + (eye / Math.max(1, corrected)) * projDist - 40;
+  return { x, y };
 }
 
 function renderCrosshair() {
@@ -985,6 +1228,14 @@ function renderMinimap(toCtx = ctx, x=16, y=16, width=Math.min(canvas.width*0.26
   toCtx.lineTo(f.x, f.y);
   toCtx.stroke();
   toCtx.lineWidth = 1;
+
+  toCtx.fillStyle = "#ff4a4a";
+  for (const enemy of game.enemies) {
+    const ep = worldToMinimapPoint(enemy.x, enemy.y, x, y, width, height);
+    toCtx.beginPath();
+    toCtx.arc(ep.x, ep.y, 3.2, 0, Math.PI * 2);
+    toCtx.fill();
+  }
 }
 
 function renderBigMap() {
@@ -1029,6 +1280,7 @@ document.getElementById("difficultySelect").addEventListener("change", e => { ga
 
 if (!loadGame()) { syncSettingsControls(); refreshProfileStats(); applyLanguage(); }
 updateAmmoHud();
+updateHealthHud();
 openMainMenu();
 fade.style.transition = "opacity 5s ease";
 fade.style.opacity = "1";
@@ -1047,6 +1299,8 @@ function loop(now) {
   updatePlayer(dt);
   renderFloorAndSky();
   renderWalls();
+  renderEnemies();
+  renderEnemyTracers();
   renderWeapon();
   renderCrosshair();
   renderMinimap();
