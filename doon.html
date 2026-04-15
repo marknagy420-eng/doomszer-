@@ -82,6 +82,12 @@ const player = {
 
 const keys = Object.create(null);
 
+const weapon = {
+  modelFile: "m3_benelli_final.max",
+  recoil: 0,
+  muzzleFlash: 0
+};
+
 document.addEventListener("keydown", (e) => {
   keys[e.key.toLowerCase()] = true;
 });
@@ -95,6 +101,17 @@ canvas.addEventListener("click", () => canvas.requestPointerLock());
 document.addEventListener("mousemove", (e) => {
   if (document.pointerLockElement === canvas) {
     player.angle += e.movementX * 0.0026;
+  }
+});
+
+function fireWeapon() {
+  weapon.recoil = 1;
+  weapon.muzzleFlash = 0.08;
+}
+
+canvas.addEventListener("mousedown", (e) => {
+  if (e.button === 0 && document.pointerLockElement === canvas) {
+    fireWeapon();
   }
 });
 
@@ -125,6 +142,9 @@ function updatePlayer(dt) {
   const turnSpeed = 2.5;
   const moveSpeed = (keys["shift"] ? 360 : 250) * dt;
 
+  weapon.recoil = Math.max(0, weapon.recoil - dt * 7);
+  weapon.muzzleFlash = Math.max(0, weapon.muzzleFlash - dt);
+
   if (keys["arrowleft"]) player.angle -= turnSpeed * dt;
   if (keys["arrowright"]) player.angle += turnSpeed * dt;
 
@@ -154,7 +174,7 @@ function updatePlayer(dt) {
 const floorTexture = new Image();
 const wallTexture = new Image();
 floorTexture.src = "talaj.png";
-wallTexture.src = "wall.jpg";
+wallTexture.src = "wall.png";
 
 let floorPixels = null;
 let floorTexW = 0;
@@ -321,6 +341,36 @@ function renderCrosshair() {
   ctx.fillRect(cx - 9, cy - 1, 18, 2);
 }
 
+function renderWeapon() {
+  const gunW = Math.min(canvas.width * 0.38, 520);
+  const gunH = gunW * 0.5;
+  const recoilOffset = weapon.recoil * 26;
+  const x = canvas.width * 0.5 - gunW * 0.5;
+  const y = canvas.height - gunH + recoilOffset;
+
+  const grad = ctx.createLinearGradient(x, y, x, y + gunH);
+  grad.addColorStop(0, "#4f5a66");
+  grad.addColorStop(1, "#1e232a");
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(x + gunW * 0.1, y + gunH);
+  ctx.quadraticCurveTo(x + gunW * 0.5, y - gunH * 0.28, x + gunW * 0.9, y + gunH);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(255,255,255,0.8)";
+  ctx.font = `${Math.max(12, Math.floor(canvas.height * 0.018))}px monospace`;
+  ctx.fillText(`Fegyver: ${weapon.modelFile}`, x + 14, y + gunH * 0.8);
+
+  if (weapon.muzzleFlash > 0) {
+    const alpha = Math.min(0.7, weapon.muzzleFlash * 9);
+    ctx.fillStyle = `rgba(255,210,120,${alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(canvas.width * 0.5, y - gunH * 0.1, gunW * 0.08, gunH * 0.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 function renderMinimap() {
   const scale = 0.1;
   const w = MAP[0].length * TILE_SIZE * scale;
@@ -333,7 +383,7 @@ function renderMinimap() {
 
   for (let y = 0; y < MAP.length; y++) {
     for (let x = 0; x < MAP[0].length; x++) {
-      ctx.fillStyle = MAP[y][x] ? "#7c7c7c" : "#1f1f1f";
+      ctx.fillStyle = MAP[y][x] ? "#1f1f1f" : "#8b8b8b";
       ctx.fillRect(ox + x * TILE_SIZE * scale, oy + y * TILE_SIZE * scale, TILE_SIZE * scale, TILE_SIZE * scale);
     }
   }
@@ -360,6 +410,7 @@ function loop(now) {
   updatePlayer(dt);
   renderFloorAndSky();
   renderWalls();
+  renderWeapon();
   renderCrosshair();
   renderMinimap();
 
