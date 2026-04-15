@@ -318,6 +318,7 @@ const player = { x:TILE_SIZE*1.6, y:TILE_SIZE*1.6, angle:0, pitch:0, z:0, veloci
 const game = {
   state:"menu", score:0, totalShots:0,
   settings:{ sound:"on", language:"hu", difficulty:"normal" },
+  musicArmingNeeded:true,
   mapOpen:false,
   autoFire:false,
   time:0,
@@ -368,6 +369,7 @@ function isSoundOn() { return game.settings.sound !== "off"; }
 function tryPlay(aud, fromStart = false) {
   if (!isSoundOn()) return;
   try {
+    if (!aud.paused && !aud.ended) return;
     if (fromStart) aud.currentTime = 0;
     const p = aud.play();
     if (p && typeof p.catch === "function") p.catch(() => {});
@@ -385,12 +387,16 @@ function playOneShotFrom(template) {
   } catch {}
 }
 function updateMenuMusicState() {
-  if (isSoundOn()) tryPlay(audio.menuMusic);
+  if (game.state === "menu" && !game.musicArmingNeeded && isSoundOn()) tryPlay(audio.menuMusic);
   else tryPause(audio.menuMusic);
 }
-function activateSoundtrack() {
-  if (!isSoundOn()) return;
-  tryPlay(audio.menuMusic);
+
+function armMusicOnFirstInteraction() {
+  if (!game.musicArmingNeeded) return;
+  game.musicArmingNeeded = false;
+  if (game.state === "menu") updateMenuMusicState();
+  document.removeEventListener("pointerdown", armMusicOnFirstInteraction);
+  document.removeEventListener("keydown", armMusicOnFirstInteraction);
 }
 
 function updateWalkSound() {
@@ -906,17 +912,17 @@ function renderPausedDim() {
   ctx.fillRect(0,0,canvas.width,canvas.height);
 }
 
-document.getElementById("newGameBtn").addEventListener("click", () => { activateSoundtrack(); withFade(() => { resetRun(); enterGame(); }); });
-document.getElementById("continueBtn").addEventListener("click", () => { activateSoundtrack(); withFade(() => { loadGame(); enterGame(); }); });
+document.getElementById("newGameBtn").addEventListener("click", () => { withFade(() => { resetRun(); enterGame(); }); });
+document.getElementById("continueBtn").addEventListener("click", () => { withFade(() => { loadGame(); enterGame(); }); });
 document.getElementById("settingsBtn").addEventListener("click", () => openPopup("settingsPopup"));
 document.getElementById("storeBtn").addEventListener("click", () => openPopup("storePopup"));
 document.getElementById("scoreboardBtn").addEventListener("click", () => { refreshProfileStats(); openPopup("scorePopup"); });
 document.querySelectorAll("[data-close]").forEach(btn => btn.addEventListener("click", closeAllPopups));
 mainMenu.querySelectorAll("button").forEach(btn => btn.addEventListener("click", playButtonSound));
 
-document.getElementById("resumeBtn").addEventListener("click", () => { activateSoundtrack(); togglePause(); });
-document.getElementById("restartBtn").addEventListener("click", () => { activateSoundtrack(); resetRun(); pauseMenu.classList.remove("visible"); enterGame(); });
-document.getElementById("toMenuBtn").addEventListener("click", () => { activateSoundtrack(); saveGame(); withFade(openMainMenu); });
+document.getElementById("resumeBtn").addEventListener("click", () => { togglePause(); });
+document.getElementById("restartBtn").addEventListener("click", () => { resetRun(); pauseMenu.classList.remove("visible"); enterGame(); });
+document.getElementById("toMenuBtn").addEventListener("click", () => { saveGame(); withFade(openMainMenu); });
 document.getElementById("exitBtn").addEventListener("click", () => {
   saveGame();
   withFade(() => {
@@ -938,6 +944,8 @@ document.getElementById("difficultySelect").addEventListener("change", e => { ga
 if (!loadGame()) { syncSettingsControls(); refreshProfileStats(); applyLanguage(); }
 updateAmmoHud();
 openMainMenu();
+document.addEventListener("pointerdown", armMusicOnFirstInteraction, { once:true });
+document.addEventListener("keydown", armMusicOnFirstInteraction, { once:true });
 fade.style.transition = "opacity .6s ease";
 fade.style.opacity = "1";
 requestAnimationFrame(() => { requestAnimationFrame(() => { fade.style.opacity = "0"; }); });
