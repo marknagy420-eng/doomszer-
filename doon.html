@@ -44,31 +44,31 @@ const PLAYER_RADIUS = 20;       // collision 32-48 unit szélességhez igazítva
 const PLAYER_HEIGHT = 64;       // referencia 56-72
 
 const MAP = [
-  "################################",
-  "#...#......................#...#",
-  "#...#.####################.#...#",
-  "#...#.#..................#.#...#",
-  "#####.#.################.#.#####",
-  "#.....#.#..............#.#.....#",
-  "#.#####.#.############.#.#####.#",
-  "#.#.....#.#..........#.#.....#.#",
-  "#.#.#####.#.########.#.#####.#.#",
-  "#.#.#...#.#....##....#.#...#.#.#",
-  "#...#...#.#.########.#.#...#...#",
-  "#####...#.#..........#.#...#####",
-  "#.......#.############.#.......#",
-  "#.#######......##......#######.#",
-  "#.#.....######.##.######.....#.#",
-  "#.#.###......#....#......###.#.#",
-  "#...#.#.####.######.####.#.#...#",
-  "###.#.#.#..........#....#.#.###.",
-  "#...#...#.##########.##...#...##",
-  "#.#######.#........#.#.#######.#",
-  "#.........#.######.#.#.........#",
-  "#########.#.#....#.#.#########.#",
-  "#.........#.#.##.#.#.........#.#",
-  "################################"
-].map(row => row.replace(/\./g, "0").replace(/#/g, "1").split("").map(Number));
+  "11111111111111111111111111111111",
+  "10000111110000000000011111000011",
+  "10000000000000000000000000000011",
+  "10000111111111111111111111000011",
+  "11110100000111111110000001011111",
+  "11110100000100000010000001011111",
+  "10000000000100000010000000000011",
+  "10000111111100000011111111000011",
+  "10000111000000000000000111000011",
+  "10000111011110000011110111000011",
+  "10000000011110000011110000000011",
+  "11111100000000000000000000111111",
+  "11000000011111100111111000000011",
+  "11000000011000100100011000000011",
+  "11000000011000100100011000000011",
+  "11000000011111100111111000000011",
+  "11000111111111000001111110000111",
+  "11000111100000000000000110000111",
+  "11000111101111111111110110000111",
+  "11000000001100000110000000000111",
+  "11111110001100000110001111111111",
+  "11111110000000000000001111111111",
+  "11111111111111111111111111111111",
+  "11111111111111111111111111111111"
+].map(row => row.split("").map(Number));
 
 const worldWidth = MAP[0].length * TILE_SIZE;
 const worldHeight = MAP.length * TILE_SIZE;
@@ -173,7 +173,7 @@ function updatePlayer(dt) {
 
 const floorTexture = new Image();
 const wallTexture = new Image();
-floorTexture.src = "talaj.png";
+floorTexture.src = "wood.png";
 wallTexture.src = "wall.png";
 
 let floorPixels = null;
@@ -343,24 +343,64 @@ function renderCrosshair() {
 
 function renderWeapon() {
   const gunW = Math.min(canvas.width * 0.38, 520);
-  const gunH = gunW * 0.5;
-  const recoilOffset = weapon.recoil * 26;
-  const x = canvas.width * 0.5 - gunW * 0.5;
-  const y = canvas.height - gunH + recoilOffset;
+  const gunH = gunW * 0.56;
+  const recoilOffset = weapon.recoil * 24;
+  const sway = Math.sin(performance.now() * 0.006) * 2;
+  const x = canvas.width * 0.5 - gunW * 0.5 + sway;
+  const y = canvas.height - gunH * 0.88 + recoilOffset;
 
-  const grad = ctx.createLinearGradient(x, y, x, y + gunH);
-  grad.addColorStop(0, "#4f5a66");
-  grad.addColorStop(1, "#1e232a");
-  ctx.fillStyle = grad;
+  // tus
+  const stockGrad = ctx.createLinearGradient(x, y + gunH * 0.5, x + gunW * 0.46, y + gunH);
+  stockGrad.addColorStop(0, "#6b4b2e");
+  stockGrad.addColorStop(1, "#2f2014");
+  ctx.fillStyle = stockGrad;
   ctx.beginPath();
-  ctx.moveTo(x + gunW * 0.1, y + gunH);
-  ctx.quadraticCurveTo(x + gunW * 0.5, y - gunH * 0.28, x + gunW * 0.9, y + gunH);
+  ctx.moveTo(x + gunW * 0.15, y + gunH * 0.96);
+  ctx.lineTo(x + gunW * 0.44, y + gunH * 0.86);
+  ctx.lineTo(x + gunW * 0.48, y + gunH * 0.98);
+  ctx.lineTo(x + gunW * 0.12, y + gunH);
   ctx.closePath();
   ctx.fill();
 
+  // test
+  const bodyGrad = ctx.createLinearGradient(x, y, x + gunW, y + gunH);
+  bodyGrad.addColorStop(0, "#75818b");
+  bodyGrad.addColorStop(0.45, "#2f3945");
+  bodyGrad.addColorStop(1, "#161c24");
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.moveTo(x + gunW * 0.2, y + gunH * 0.88);
+  ctx.lineTo(x + gunW * 0.34, y + gunH * 0.68);
+  ctx.lineTo(x + gunW * 0.62, y + gunH * 0.62);
+  ctx.lineTo(x + gunW * 0.7, y + gunH * 0.88);
+  ctx.closePath();
+  ctx.fill();
+
+  // cső perspektívában
+  const barrelGrad = ctx.createLinearGradient(x + gunW * 0.36, y + gunH * 0.62, x + gunW * 0.82, y + gunH * 0.45);
+  barrelGrad.addColorStop(0, "#929daa");
+  barrelGrad.addColorStop(1, "#252d38");
+  ctx.fillStyle = barrelGrad;
+  ctx.beginPath();
+  ctx.moveTo(x + gunW * 0.34, y + gunH * 0.66);
+  ctx.lineTo(x + gunW * 0.82, y + gunH * 0.47);
+  ctx.lineTo(x + gunW * 0.86, y + gunH * 0.54);
+  ctx.lineTo(x + gunW * 0.38, y + gunH * 0.72);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#a8b5c2";
+  ctx.fillRect(x + gunW * 0.6, y + gunH * 0.56, gunW * 0.08, gunH * 0.04);
+  ctx.fillRect(x + gunW * 0.69, y + gunH * 0.53, gunW * 0.06, gunH * 0.04);
+
+  ctx.fillStyle = "rgba(255,255,255,0.4)";
+  ctx.fillRect(x + gunW * 0.36, y + gunH * 0.67, gunW * 0.42, gunH * 0.012);
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.fillRect(x + gunW * 0.32, y + gunH * 0.78, gunW * 0.4, gunH * 0.03);
+
   ctx.fillStyle = "rgba(255,255,255,0.8)";
-  ctx.font = `${Math.max(12, Math.floor(canvas.height * 0.018))}px monospace`;
-  ctx.fillText(`Fegyver: ${weapon.modelFile}`, x + 14, y + gunH * 0.8);
+  ctx.font = `${Math.max(11, Math.floor(canvas.height * 0.015))}px monospace`;
+  ctx.fillText(`Model: ${weapon.modelFile}`, x + gunW * 0.12, y + gunH * 1.02);
 
   if (weapon.muzzleFlash > 0) {
     const alpha = Math.min(0.7, weapon.muzzleFlash * 9);
@@ -383,7 +423,7 @@ function renderMinimap() {
 
   for (let y = 0; y < MAP.length; y++) {
     for (let x = 0; x < MAP[0].length; x++) {
-      ctx.fillStyle = MAP[y][x] ? "#1f1f1f" : "#8b8b8b";
+      ctx.fillStyle = MAP[y][x] ? "#c9c9c9" : "#4f4f4f";
       ctx.fillRect(ox + x * TILE_SIZE * scale, oy + y * TILE_SIZE * scale, TILE_SIZE * scale, TILE_SIZE * scale);
     }
   }
