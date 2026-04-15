@@ -353,7 +353,8 @@ const floorTexture = new Image();
 const wallTexture = new Image();
 const gunTexture = new Image();
 const mapTexture = new Image();
-floorTexture.src = "wood.png";
+floorTexture.src = "talaj.png";
+floorTexture.onerror = () => { floorTexture.src = "wood.png"; };
 wallTexture.src = "wall.png";
 gunTexture.src = "gun.png";
 mapTexture.src = "map.png";
@@ -494,7 +495,7 @@ function syncSettingsControls() {
 function refreshProfileStats() { lastScoreEl.textContent = String(game.score); totalShotsEl.textContent = String(game.totalShots); }
 
 function resetRun() {
-  Object.assign(player, {x:TILE_SIZE*1.6, y:TILE_SIZE*1.6, angle:0, pitch:0, z:0, velocityZ:0, isGrounded:true, crouchLocked:false, eyeHeight:PLAYER_HEIGHT});
+  Object.assign(player, {x:TILE_SIZE*1.6, y:TILE_SIZE*1.6, angle:0, pitch:0, z:0, velocityZ:0, isGrounded:true, crouchLocked:false, eyeHeight:PLAYER_HEIGHT, velX:0, velY:0});
   game.score = 0; game.mapOpen = false; game.tracers = [];
   weapon.ammoInClip = weapon.clipSize; weapon.reserveAmmo = 100; weapon.reloading = false; weapon.reloadTimer = 0; weapon.reloadAnim = 0;
   updateAmmoHud(); refreshProfileStats(); saveGame();
@@ -575,7 +576,14 @@ function fireWeapon() {
   weapon.muzzleFlash = 0.08;
   weapon.fireCooldown = game.autoFire ? weapon.autoRate : weapon.semiRate;
   game.totalShots += 1; game.score += 10;
-  game.tracers.push({ life:0.06, len: 80 + Math.random()*40, xJ:(Math.random()-0.5)*10, yJ:(Math.random()-0.5)*8 });
+  game.tracers.push({
+    age: 0,
+    duration: 0.16,
+    len: 120 + Math.random() * 90,
+    xJ: (Math.random() - 0.5) * 10,
+    yJ: (Math.random() - 0.5) * 8,
+    arc: (Math.random() - 0.5) * 28
+  });
   if (game.tracers.length > 6) game.tracers.shift();
   playOneShotFrom(audio.shotTemplate);
   updateAmmoHud();
@@ -662,17 +670,30 @@ function tryMove(nx, ny) {
 function updatePlayer(dt) {
   if (game.state !== "playing") return;
   game.time += dt;
-  const moveSpeed = (keys["shift"] ? 370 : 250) * dt;
+  const moveSpeed = keys["shift"] ? 370 : 250;
+  const acceleration = 14;
+  const deceleration = 11;
 
-  let vx=0, vy=0;
-  if (keys["w"]) { vx += Math.cos(player.angle)*moveSpeed; vy += Math.sin(player.angle)*moveSpeed; }
-  if (keys["s"]) { vx -= Math.cos(player.angle)*moveSpeed; vy -= Math.sin(player.angle)*moveSpeed; }
-  if (keys["a"]) { vx += Math.cos(player.angle-Math.PI/2)*moveSpeed; vy += Math.sin(player.angle-Math.PI/2)*moveSpeed; }
-  if (keys["d"]) { vx += Math.cos(player.angle+Math.PI/2)*moveSpeed; vy += Math.sin(player.angle+Math.PI/2)*moveSpeed; }
+  let inputX = 0, inputY = 0;
+  if (keys["w"]) inputY += 1;
+  if (keys["s"]) inputY -= 1;
+  if (keys["a"]) inputX -= 1;
+  if (keys["d"]) inputX += 1;
+
+  const inputLen = Math.hypot(inputX, inputY) || 1;
+  inputX /= inputLen;
+  inputY /= inputLen;
+
+  const targetVelX = (Math.cos(player.angle) * inputY + Math.cos(player.angle + Math.PI / 2) * inputX) * moveSpeed;
+  const targetVelY = (Math.sin(player.angle) * inputY + Math.sin(player.angle + Math.PI / 2) * inputX) * moveSpeed;
+  const blend = Math.min(1, (Math.abs(inputX) > 0.001 || Math.abs(inputY) > 0.001 ? acceleration : deceleration) * dt);
+  player.velX = (player.velX || 0) + (targetVelX - (player.velX || 0)) * blend;
+  player.velY = (player.velY || 0) + (targetVelY - (player.velY || 0)) * blend;
+
   if (keys["arrowleft"]) player.angle -= 2.4*dt;
   if (keys["arrowright"]) player.angle += 2.4*dt;
 
-  tryMove(player.x + vx, player.y + vy);
+  tryMove(player.x + player.velX * dt, player.y + player.velY * dt);
   const targetHeight = player.crouchLocked ? PLAYER_HEIGHT * 0.62 : PLAYER_HEIGHT;
   player.eyeHeight += (targetHeight - player.eyeHeight) * Math.min(1, dt * 13);
 
@@ -705,8 +726,8 @@ function updatePlayer(dt) {
     weapon.reloadAnim = 0;
   }
 
-  game.tracers.forEach(t => t.life -= dt);
-  game.tracers = game.tracers.filter(t => t.life > 0);
+  game.tracers.forEach(t => t.age += dt);
+  game.tracers = game.tracers.filter(t => t.age < t.duration);
 }
 
 document.addEventListener("mousedown", e => { if (e.button===0) keys["mouse0"]=true; });
@@ -839,7 +860,8 @@ function renderCrosshair() {
 function renderWeapon() {
   const gunW = Math.min(canvas.width * 0.43, 620);
   const gunH = gunW * 0.62;
-  const breath = Math.sin(game.time * 2.6) * 4;
+  const moveEnergy = Math.min(1, Math.hypot(player.velX || 0, player.velY || 0) / 300);
+  const breath = Math.sin(game.time * (2.2 + moveEnergy * 1.6)) * (3 + moveEnergy * 3.5);
   const recoil = weapon.recoil * 28;
   const reloadEase = Math.sin(weapon.reloadAnim * Math.PI);
   const reloadDrop = reloadEase * gunH * 0.18;
@@ -873,13 +895,22 @@ function renderWeapon() {
   }
 
   for (const tr of game.tracers) {
-    const p = tr.life / 0.06;
-    ctx.strokeStyle = `rgba(255,230,170,${0.35 + p * 0.45})`;
-    ctx.lineWidth = 2 + p;
+    const t = Math.max(0, Math.min(1, tr.age / tr.duration));
+    const eased = 1 - Math.pow(1 - t, 3);
+    const alpha = (1 - t) * 0.75;
+    const tipY = muzzleY + tr.yJ - tr.len * eased;
+    const midY = muzzleY + tr.yJ - tr.len * 0.5 + tr.arc;
+    ctx.strokeStyle = `rgba(255,225,140,${alpha})`;
+    ctx.lineWidth = 1.6 + (1 - t) * 1.8;
     ctx.beginPath();
     ctx.moveTo(muzzleX + tr.xJ, muzzleY + tr.yJ);
-    ctx.lineTo(muzzleX + tr.xJ, muzzleY + tr.yJ - tr.len * p);
+    ctx.quadraticCurveTo(muzzleX + tr.xJ + tr.arc * 0.08, midY, muzzleX + tr.xJ, tipY);
     ctx.stroke();
+
+    ctx.fillStyle = `rgba(255,210,90,${0.24 + alpha * 0.55})`;
+    ctx.beginPath();
+    ctx.arc(muzzleX + tr.xJ, tipY, 2.2 + (1 - t) * 2.6, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   ctx.fillStyle = "rgba(255,255,255,.8)";
